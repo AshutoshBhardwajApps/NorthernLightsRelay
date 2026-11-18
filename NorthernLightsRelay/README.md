@@ -12,3 +12,7 @@ Drag left or right to steer through the ice gates. The run speeds up as gates ar
 - Settings persistence follows the template's `SettingsStore` pattern.
 - AdMob is intentionally not wired yet. Before adding it for a release, follow `ADS_INTEGRATION.md` and supply this app's own AdMob app and unit IDs.
 - Repository: https://github.com/AshutoshBhardwajApps/NorthernLightsRelay
+
+## Run on iPhone
+
+Clone the repository, open `NorthernLightsRelay/NorthernLightsRelay.xcodeproj`, choose the `NorthernLightsRelay` scheme and your connected iPhone, then press **Run**. If Xcode requests signing, select your Apple development team in the target's **Signing & Capabilities** settings. The project targets iOS 17 or later.

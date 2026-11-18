@@ -10,6 +10,10 @@ Drag left or right to steer through the ice gates. The run speeds up as gates ar
 
 Root-level `index.html`, `privacy_policy.html`, and `app-ads.txt` follow the static GitHub Pages layout used by CoopHockey. GitHub Pages publishes from the `main` branch root.
 
+## Run on iPhone
+
+Clone this repository, open `NorthernLightsRelay/NorthernLightsRelay.xcodeproj`, select the `NorthernLightsRelay` scheme and your connected iPhone, then press **Run**. If Xcode requests signing, choose your Apple development team in the target's **Signing & Capabilities** settings. The project targets iOS 17 or later.
+
 ## Project notes
 
 - The game uses a bundled moon and tinted puck sprite, plus bundled ambient music and chimes.

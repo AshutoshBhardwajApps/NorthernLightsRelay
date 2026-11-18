@@ -140,7 +140,9 @@ final class RelayScene: SKScene {
         if milestoneIndex < ribbons.count {
             ribbons[milestoneIndex].run(.fadeIn(withDuration: 3))
         }
-        AudioManager.shared.playMilestoneChime()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            AudioManager.shared.playMilestoneChime()
+        }
         if milestoneIndex == Self.milestones.count - 1 {
             stars.forEach { $0.run(.fadeAlpha(to: 1, duration: 3)) }
         }
