@@ -1,18 +1,37 @@
 import AVFoundation
 
 /// Keeps the music and soft game cues in sync with the saved sound preferences.
-final class AudioManager: NSObject, AVAudioPlayerDelegate {
+///
+/// Chimes go through an AVAudioEngine that is started once and kept running.
+/// Each chime is just a pre-decoded buffer scheduled on a player node, done on a
+/// background queue. Earlier, AVAudioPlayer.play() ran on the main thread at the
+/// moment the puck passed a gate and stalled the game for 2–3 frames.
+final class AudioManager {
     static let shared = AudioManager()
 
+    private struct Voice {
+        let player: AVAudioPlayerNode
+        let varispeed: AVAudioUnitVarispeed
+    }
+
     private var musicPlayer: AVAudioPlayer?
-    private var activeEffects: [ObjectIdentifier: AVAudioPlayer] = [:]
     private var musicEnabled = true
     private var effectsEnabled = true
 
-    private override init() {
-        super.init()
+    private let engine = AVAudioEngine()
+    private let audioQueue = DispatchQueue(label: "northernlights.audio", qos: .userInitiated)
+    private var buffers: [String: AVAudioPCMBuffer] = [:]
+    private var voices: [String: [Voice]] = [:]
+    private var nextVoice: [String: Int] = [:]
+    private static let effectVolume: [String: Float] = ["gate_chime": 0.24, "milestone_chime": 0.34]
+
+    private init() {
         configureAudioSession()
         prepareMusic()
+        audioQueue.async { self.setUpEffects() }
+        NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil) { [weak self] _ in
+            self?.audioQueue.async { self?.startEngineIfNeeded() }
+        }
     }
 
     func updateSettings(musicEnabled: Bool, effectsEnabled: Bool) {
@@ -23,8 +42,7 @@ final class AudioManager: NSObject, AVAudioPlayerDelegate {
     func setEffectsEnabled(_ enabled: Bool) {
         effectsEnabled = enabled
         if !enabled {
-            activeEffects.values.forEach { $0.stop() }
-            activeEffects.removeAll()
+            audioQueue.async { self.voices.values.flatMap { $0 }.forEach { $0.player.stop() } }
         }
     }
 
@@ -51,6 +69,9 @@ final class AudioManager: NSObject, AVAudioPlayerDelegate {
         playEffect(named: "milestone_chime", rate: 1)
     }
 
+    /// Kept for callers; effects load in the background at launch.
+    func preloadEffects() {}
+
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
@@ -76,20 +97,49 @@ final class AudioManager: NSObject, AVAudioPlayerDelegate {
         }
     }
 
-    private func playEffect(named name: String, rate: Float) {
-        guard effectsEnabled,
-              let url = Bundle.main.url(forResource: name, withExtension: "wav"),
-              let player = try? AVAudioPlayer(contentsOf: url) else { return }
-        player.delegate = self
-        player.enableRate = true
-        player.rate = rate
-        player.volume = name == "gate_chime" ? 0.24 : 0.34
-        activeEffects[ObjectIdentifier(player)] = player
-        player.prepareToPlay()
-        player.play()
+    // MARK: - Effects engine (audioQueue only)
+
+    private func setUpEffects() {
+        for (name, count) in [("gate_chime", 4), ("milestone_chime", 2)] {
+            guard let url = Bundle.main.url(forResource: name, withExtension: "wav"),
+                  let file = try? AVAudioFile(forReading: url),
+                  let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                                frameCapacity: AVAudioFrameCount(file.length)),
+                  (try? file.read(into: buffer)) != nil else { continue }
+            buffers[name] = buffer
+            voices[name] = (0..<count).map { _ in
+                let player = AVAudioPlayerNode()
+                let varispeed = AVAudioUnitVarispeed()
+                engine.attach(player)
+                engine.attach(varispeed)
+                engine.connect(player, to: varispeed, format: buffer.format)
+                engine.connect(varispeed, to: engine.mainMixerNode, format: buffer.format)
+                player.volume = Self.effectVolume[name] ?? 0.3
+                return Voice(player: player, varispeed: varispeed)
+            }
+        }
+        engine.prepare()
+        startEngineIfNeeded()
     }
 
-    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        activeEffects.removeValue(forKey: ObjectIdentifier(player))
+    private func startEngineIfNeeded() {
+        guard !engine.isRunning else { return }
+        try? engine.start()
+    }
+
+    private func playEffect(named name: String, rate: Float) {
+        guard effectsEnabled else { return }
+        audioQueue.async {
+            guard let buffer = self.buffers[name], let pool = self.voices[name], !pool.isEmpty else { return }
+            self.startEngineIfNeeded()
+            // Round-robin so overlapping chimes don't cut each other off.
+            let index = self.nextVoice[name, default: 0] % pool.count
+            self.nextVoice[name] = index + 1
+            let voice = pool[index]
+            voice.varispeed.rate = rate
+            voice.player.stop()
+            voice.player.scheduleBuffer(buffer, at: nil, options: [])
+            voice.player.play()
+        }
     }
 }

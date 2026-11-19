@@ -1,7 +1,8 @@
 import Foundation
 import SwiftUI
 
-/// A puck colour + trail the player can unlock by clearing gates over all runs.
+/// A lantern spirit (the light's colour, halo and trail) awakened by passing
+/// arches over all runs. Called a "puck" in older code.
 struct PuckStyle: Identifiable, Equatable {
     let id: String
     let name: String
@@ -29,6 +30,7 @@ final class SettingsStore: ObservableObject {
     @Published var musicEnabled: Bool { didSet { save() } }
     @Published var effectsEnabled: Bool { didSet { save() } }
     @Published var selectedStyleID: String { didSet { save() } }
+    @Published var hasSeenIntro: Bool { didSet { save() } }
     @Published private(set) var bestScore: Int
     @Published private(set) var runsCompleted: Int
     @Published private(set) var totalGates: Int
@@ -42,6 +44,7 @@ final class SettingsStore: ObservableObject {
         musicEnabled = defaults.object(forKey: prefix + "music") as? Bool ?? true
         effectsEnabled = defaults.object(forKey: prefix + "effects") as? Bool ?? true
         selectedStyleID = defaults.string(forKey: prefix + "style") ?? "frost"
+        hasSeenIntro = defaults.bool(forKey: prefix + "seenIntro")
         bestScore = defaults.integer(forKey: prefix + "bestScore")
         runsCompleted = defaults.integer(forKey: prefix + "runs")
         totalGates = defaults.integer(forKey: prefix + "totalGates")
@@ -111,6 +114,7 @@ final class SettingsStore: ObservableObject {
         defaults.set(musicEnabled, forKey: prefix + "music")
         defaults.set(effectsEnabled, forKey: prefix + "effects")
         defaults.set(selectedStyleID, forKey: prefix + "style")
+        defaults.set(hasSeenIntro, forKey: prefix + "seenIntro")
         defaults.set(bestScore, forKey: prefix + "bestScore")
         defaults.set(runsCompleted, forKey: prefix + "runs")
         defaults.set(totalGates, forKey: prefix + "totalGates")

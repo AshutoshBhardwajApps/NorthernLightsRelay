@@ -8,10 +8,12 @@ struct HomeView: View {
     @State private var finalScore: Int?
     @State private var runID = UUID()
     @State private var runScene = RelayScene(size: CGSize(width: 390, height: 844))
-    @State private var currentScore = 0
     @State private var isNewBest = false
     @State private var newlyUnlocked: [PuckStyle] = []
     @State private var canRestart = false
+    @State private var isPaused = false
+    @State private var showIntro = false
+    @Environment(\.scenePhase) private var scenePhase
 
     private let ink = Color(red: 0.03, green: 0.10, blue: 0.17)
 
@@ -26,9 +28,19 @@ struct HomeView: View {
                 homeScreen
                     .transition(.opacity)
             }
+
+            if !isPlaying && (showIntro || !settings.hasSeenIntro) {
+                StoryIntroView {
+                    settings.hasSeenIntro = true
+                    showIntro = false
+                }
+                .transition(.opacity)
+            }
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.35), value: isPlaying)
+        .animation(.easeInOut(duration: 0.6), value: showIntro)
+        .animation(.easeInOut(duration: 0.6), value: settings.hasSeenIntro)
         .onAppear {
             AudioManager.shared.updateSettings(musicEnabled: settings.musicEnabled,
                                                effectsEnabled: settings.effectsEnabled)
@@ -38,6 +50,10 @@ struct HomeView: View {
         }
         .onChange(of: settings.effectsEnabled) { _, enabled in
             AudioManager.shared.setEffectsEnabled(enabled)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Leaving the app mid-run pauses it, so you never return to a crash.
+            if phase != .active && isPlaying && finalScore == nil { setPaused(true) }
         }
     }
 
@@ -59,7 +75,7 @@ struct HomeView: View {
                 .tracking(8)
                 .foregroundStyle(Color.cyan.opacity(0.9))
                 .padding(.top, 7)
-            Text("A midnight run across the frozen canals.")
+            Text("Carry the last light across the frozen north.")
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.65))
                 .padding(.top, 20)
@@ -68,7 +84,7 @@ struct HomeView: View {
 
             HStack(alignment: .top, spacing: 0) {
                 statColumn(title: "PERSONAL BEST", value: "\(settings.bestScore)")
-                statColumn(title: "DAY STREAK", value: "\(settings.currentStreak)", symbol: settings.currentStreak > 0 ? "flame.fill" : nil)
+                statColumn(title: "NIGHTS LIT", value: "\(settings.currentStreak)", symbol: settings.currentStreak > 0 ? "flame.fill" : nil)
             }
             .padding(.horizontal, 36)
 
@@ -85,7 +101,7 @@ struct HomeView: View {
             Button { startRun(zen: false) } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "arrow.right")
-                    Text("START RUN").tracking(2)
+                    Text("CARRY THE LIGHT").tracking(2)
                 }
                 .font(.headline.weight(.bold))
                 .foregroundStyle(ink)
@@ -110,12 +126,22 @@ struct HomeView: View {
             .padding(.horizontal, 36)
             .padding(.top, 12)
 
-            Text("DRAG TO STEER · SLIP THROUGH THE GATES")
+            Text("DRAG TO GUIDE THE LIGHT THROUGH THE ARCHES")
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .tracking(1.3)
                 .foregroundStyle(.white.opacity(0.48))
                 .padding(.top, 14)
-                .padding(.bottom, 44)
+
+            Button { showIntro = true } label: {
+                Label("THE STORY", systemImage: "book")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .tracking(1.3)
+                    .foregroundStyle(Color.cyan.opacity(0.7))
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 14)
+            }
+            .padding(.top, 2)
+            .padding(.bottom, 30)
         }
         .padding(.top, 50)
     }
@@ -146,12 +172,12 @@ struct HomeView: View {
         let goal = SettingsStore.dailyGoal
         return VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text(settings.dailyGoalMet ? "TODAY'S GOAL MET" : "TODAY'S GOAL")
+                Text(settings.dailyGoalMet ? "TONIGHT'S RELAY COMPLETE" : "TONIGHT'S RELAY")
                     .font(.caption2.weight(.bold))
                     .tracking(1.8)
                     .foregroundStyle(settings.dailyGoalMet ? Color.green.opacity(0.85) : .white.opacity(0.55))
                 Spacer()
-                Text("\(min(today, goal)) / \(goal) GATES")
+                Text("\(min(today, goal)) / \(goal) ARCHES")
                     .font(.caption2.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.7))
@@ -187,11 +213,13 @@ struct HomeView: View {
                                         .font(.system(size: 11))
                                         .foregroundStyle(.white.opacity(0.5))
                                 } else {
-                                    Image("Puck")
-                                        .resizable()
-                                        .scaledToFit()
+                                    // A small glowing light in the spirit's colour.
+                                    Circle()
+                                        .fill(RadialGradient(colors: [.white, style.color, style.color.opacity(0.6)],
+                                                             center: .center, startRadius: 1, endRadius: 14))
+                                        .frame(width: 26, height: 26)
+                                        .shadow(color: style.color.opacity(0.8), radius: 8)
                                         .frame(width: 30, height: 30)
-                                        .colorMultiply(style.color)
                                 }
                             }
                             .overlay(Circle().stroke(.white.opacity(selected ? 0.9 : 0), lineWidth: 2).padding(-4))
@@ -205,7 +233,7 @@ struct HomeView: View {
                 }
             }
             if let next = settings.nextUnlock {
-                Text("\(next.remaining) more gates to unlock \(next.style.name)")
+                Text("\(next.remaining) more arches to awaken \(next.style.name)")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.45))
             }
@@ -242,17 +270,16 @@ struct HomeView: View {
 
     private var runView: some View {
         ZStack(alignment: .top) {
-            SpriteView(scene: runScene, options: [.allowsTransparency])
+            // The scene is fully opaque, so no transparency (cheaper to draw), and
+            // 120fps on ProMotion iPhones for smoother scrolling.
+            SpriteView(scene: runScene, preferredFramesPerSecond: 120, options: [.ignoresSiblingOrder])
                 .ignoresSafeArea()
                 .id(runID)
 
-            HStack(alignment: .top) {
-                Button(action: leaveRun) {
-                    Image(systemName: "xmark")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .frame(width: 44, height: 44)
-                        .background(.white.opacity(0.12), in: Circle())
+            HStack(alignment: .top, spacing: 12) {
+                hudButton(symbol: "xmark", action: leaveRun)
+                if finalScore == nil {
+                    hudButton(symbol: isPaused ? "play.fill" : "pause.fill") { setPaused(!isPaused) }
                 }
                 Spacer()
                 VStack(spacing: 2) {
@@ -261,22 +288,18 @@ struct HomeView: View {
                             .font(.system(size: 12, weight: .bold))
                             .tracking(3)
                             .foregroundStyle(.white.opacity(0.55))
-                    } else if finalScore == nil {
-                        Text("GATES")
-                            .font(.system(size: 10, weight: .bold))
-                            .tracking(2)
-                            .foregroundStyle(.white.opacity(0.55))
-                        Text("\(currentScore)")
-                            .font(.system(size: 38, weight: .light, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(.white)
-                            .contentTransition(.numericText())
                     }
+                    // The live gate count is drawn inside RelayScene.
                 }
                 .padding(.trailing, 4)
             }
             .padding(.horizontal, 24)
             .padding(.top, 58)
+
+            if isPaused && finalScore == nil {
+                pauseOverlay
+                    .transition(.opacity)
+            }
 
             if let score = finalScore {
                 endOfRun(score: score)
@@ -284,6 +307,53 @@ struct HomeView: View {
             }
         }
         .animation(.easeInOut(duration: 0.6), value: finalScore)
+        .animation(.easeInOut(duration: 0.3), value: isPaused)
+    }
+
+    private func hudButton(symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.white.opacity(0.8))
+                .frame(width: 44, height: 44)
+                .background(.white.opacity(0.12), in: Circle())
+        }
+    }
+
+    private var pauseOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { }   // swallow taps so they don't steer
+            VStack(spacing: 18) {
+                Text("PAUSED")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .tracking(5)
+                    .foregroundStyle(.white.opacity(0.8))
+                Button { setPaused(false) } label: {
+                    Label("RESUME", systemImage: "play.fill")
+                        .font(.headline.weight(.bold))
+                        .tracking(1.5)
+                        .foregroundStyle(ink)
+                        .frame(width: 220, height: 54)
+                        .background(Color.cyan, in: Capsule())
+                }
+                homeButton
+            }
+        }
+    }
+
+    private var homeButton: some View {
+        Button(action: leaveRun) {
+            Label("HOME", systemImage: "house.fill")
+                .font(.headline.weight(.semibold))
+                .tracking(1.5)
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: 220, height: 50)
+                .background(.white.opacity(0.08), in: Capsule())
+                .overlay(Capsule().stroke(.white.opacity(0.3), lineWidth: 1))
+        }
     }
 
     /// A calm end screen: no big panel, just the result and "tap to go again".
@@ -306,9 +376,9 @@ struct HomeView: View {
 
                 Group {
                     if settings.dailyGoalMet {
-                        Label("Daily goal met · \(settings.currentStreak) day streak", systemImage: "flame.fill")
+                        Label("Tonight's relay complete · \(settings.currentStreak) nights lit", systemImage: "flame.fill")
                     } else {
-                        Text("Today \(settings.todayGates) / \(SettingsStore.dailyGoal) gates")
+                        Text("Tonight's relay: \(settings.todayGates) / \(SettingsStore.dailyGoal) arches")
                     }
                 }
                 .font(.footnote)
@@ -318,23 +388,21 @@ struct HomeView: View {
                 ForEach(newlyUnlocked) { style in
                     HStack(spacing: 8) {
                         Circle().fill(style.color).frame(width: 12, height: 12)
-                        Text("New puck unlocked: \(style.name)")
+                        Text("A new spirit awakens: \(style.name)")
                     }
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.9))
                 }
 
-                Text("TAP ANYWHERE TO GLIDE AGAIN")
+                Text("TAP ANYWHERE TO CARRY IT AGAIN")
                     .font(.caption.weight(.semibold))
                     .tracking(2)
                     .foregroundStyle(.white.opacity(canRestart ? 0.75 : 0))
                     .padding(.top, 40)
                     .allowsHitTesting(false)
 
-                Button("Home") { goHome() }
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .padding(.top, 8)
+                homeButton
+                    .padding(.top, 14)
             }
             .allowsHitTesting(canRestart)
         }
@@ -375,10 +443,10 @@ struct HomeView: View {
 
     private func startRun(zen: Bool) {
         finalScore = nil
-        currentScore = 0
         isNewBest = false
         newlyUnlocked = []
         canRestart = false
+        isPaused = false
         isZenRun = zen
         // Wire the callbacks onto each new scene here. Doing it in .onAppear only
         // worked for the first run: restarting keeps the play screen on screen,
@@ -386,9 +454,6 @@ struct HomeView: View {
         let style = settings.selectedStyle
         let scene = RelayScene(size: CGSize(width: 390, height: 844), zen: zen,
                                puckColor: SKColor(red: style.red, green: style.green, blue: style.blue, alpha: 1))
-        scene.onScoreChanged = { score in
-            DispatchQueue.main.async { currentScore = score }
-        }
         scene.onGameOver = { score in
             DispatchQueue.main.async {
                 isNewBest = score > settings.bestScore
@@ -414,8 +479,15 @@ struct HomeView: View {
         goHome()
     }
 
+    private func setPaused(_ paused: Bool) {
+        isPaused = paused
+        runScene.gamePaused = paused
+    }
+
     private func goHome() {
-        runScene.isPaused = true
+        runScene.gamePaused = true
+        isPaused = false
         withAnimation { isPlaying = false; finalScore = nil }
     }
 }
+
