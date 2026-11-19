@@ -31,6 +31,10 @@ final class SettingsStore: ObservableObject {
     @Published var effectsEnabled: Bool { didSet { save() } }
     @Published var selectedStyleID: String { didSet { save() } }
     @Published var hasSeenIntro: Bool { didSet { save() } }
+    @Published var hapticsEnabled: Bool { didSet { save() } }
+    @Published private(set) var motes: Int
+    @Published private(set) var level: Int
+    @Published private(set) var goals: [Goal]
     @Published private(set) var bestScore: Int
     @Published private(set) var runsCompleted: Int
     @Published private(set) var totalGates: Int
@@ -45,6 +49,16 @@ final class SettingsStore: ObservableObject {
         effectsEnabled = defaults.object(forKey: prefix + "effects") as? Bool ?? true
         selectedStyleID = defaults.string(forKey: prefix + "style") ?? "frost"
         hasSeenIntro = defaults.bool(forKey: prefix + "seenIntro")
+        hapticsEnabled = defaults.object(forKey: prefix + "haptics") as? Bool ?? true
+        motes = defaults.integer(forKey: prefix + "motes")
+        let savedLevel = max(1, defaults.integer(forKey: prefix + "level"))
+        level = savedLevel
+        if let data = defaults.data(forKey: prefix + "goals"),
+           let saved = try? JSONDecoder().decode([Goal].self, from: data), saved.count == 3 {
+            goals = saved
+        } else {
+            goals = Goal.goals(forLevel: savedLevel)
+        }
         bestScore = defaults.integer(forKey: prefix + "bestScore")
         runsCompleted = defaults.integer(forKey: prefix + "runs")
         totalGates = defaults.integer(forKey: prefix + "totalGates")
@@ -80,9 +94,34 @@ final class SettingsStore: ObservableObject {
 
     // MARK: - Recording
 
+    /// Records a run (normal or zen): motes, goals and levels for both; best,
+    /// totals, tonight's relay and spirit unlocks for normal runs only.
+    @discardableResult
+    func record(_ run: RunResult) -> RunOutcome {
+        var outcome = RunOutcome()
+        motes += run.motes
+        outcome.motesEarned = run.motes
+        for i in goals.indices where goals[i].apply(run) {
+            outcome.completedGoals.append(goals[i])
+        }
+        if goals.allSatisfy(\.done) {
+            outcome.levelReward = 20 * level
+            motes += outcome.levelReward
+            level += 1
+            goals = Goal.goals(forLevel: level)
+            outcome.leveledUpTo = level
+        }
+        if !run.isZen {
+            outcome.unlockedStyles = recordRun(score: run.arches)
+        } else {
+            save()
+        }
+        return outcome
+    }
+
     /// Records a scored run. Returns styles unlocked by this run.
     @discardableResult
-    func recordRun(score: Int) -> [PuckStyle] {
+    private func recordRun(score: Int) -> [PuckStyle] {
         let lockedBefore = PuckStyle.all.filter { !isUnlocked($0) }
         bestScore = max(bestScore, score)
         runsCompleted += 1
@@ -115,6 +154,10 @@ final class SettingsStore: ObservableObject {
         defaults.set(effectsEnabled, forKey: prefix + "effects")
         defaults.set(selectedStyleID, forKey: prefix + "style")
         defaults.set(hasSeenIntro, forKey: prefix + "seenIntro")
+        defaults.set(hapticsEnabled, forKey: prefix + "haptics")
+        defaults.set(motes, forKey: prefix + "motes")
+        defaults.set(level, forKey: prefix + "level")
+        defaults.set(try? JSONEncoder().encode(goals), forKey: prefix + "goals")
         defaults.set(bestScore, forKey: prefix + "bestScore")
         defaults.set(runsCompleted, forKey: prefix + "runs")
         defaults.set(totalGates, forKey: prefix + "totalGates")

@@ -21,10 +21,14 @@ final class RelayScene: SKScene {
     private static let baseSky: (r: CGFloat, g: CGFloat, b: CGFloat) = (0.025, 0.07, 0.14)
     private static let milestones: [Milestone] = [
         Milestone(gates: 10, title: "THE SKY STIRS", sky: (0.03, 0.09, 0.16)),
-        Milestone(gates: 25, title: "AURORA RISING", sky: (0.03, 0.11, 0.17)),
-        Milestone(gates: 50, title: "VIOLET VEIL", sky: (0.05, 0.07, 0.18)),
-        Milestone(gates: 100, title: "THE NIGHT IS YOURS", sky: (0.06, 0.05, 0.16)),
+        Milestone(gates: 20, title: "AURORA RISING", sky: (0.03, 0.11, 0.17)),
+        Milestone(gates: 35, title: "VIOLET VEIL", sky: (0.05, 0.07, 0.18)),
+        Milestone(gates: 50, title: "THE NIGHT IS YOURS", sky: (0.06, 0.05, 0.16)),
+        Milestone(gates: 55, title: "FIRST LIGHT", sky: (0.10, 0.09, 0.21)),
     ]
+    /// A run is one night: reach this many arches and dawn breaks.
+    static let dawnArches = 60
+    private static let dawnSky: (r: CGFloat, g: CGFloat, b: CGFloat) = (0.19, 0.15, 0.28)
 
     // MARK: Pre-rendered textures
     // SKShapeNodes are re-tessellated and drawn one by one every frame, which
@@ -78,7 +82,7 @@ final class RelayScene: SKScene {
     private var ribbons: [SKNode] = []
     private var ribbonColors: [SKColor] = []
     /// Arches passed that are needed to fully light each aurora band in turn.
-    private static let ribbonThresholds = [0, 10, 25, 50, 100]
+    private static let ribbonThresholds = [0, 10, 20, 35, 50]
     private var stars: [SKNode] = []
     private var targetX: CGFloat = 0
     private var lastUpdate: TimeInterval = 0
@@ -91,8 +95,29 @@ final class RelayScene: SKScene {
     private var milestoneIndex = 0
     private var currentSky = RelayScene.baseSky
     var score: Int { scoreValue }
-    var onGameOver: ((Int) -> Void)?
-    var onScoreChanged: ((Int) -> Void)?
+    var onGameOver: ((RunResult) -> Void)?
+    var hapticsEnabled = true
+
+    // Run stats
+    private var perfects = 0
+    private var perfectStreak = 0
+    private var bestPerfectStreak = 0
+    private var motesGathered = 0
+    private var reachedDawn = false
+    private var pickups: [SKSpriteNode] = []
+    private var pickupSpawnedThisCycle = false
+    private let moteLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+    private let softHaptic = UIImpactFeedbackGenerator(style: .soft)
+    private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
+    private let crashHaptic = UIImpactFeedbackGenerator(style: .rigid)
+
+    /// Everything this run produced so far (also used when leaving mid-run).
+    var result: RunResult {
+        RunResult(arches: scoreValue, perfects: perfects, bestPerfectStreak: bestPerfectStreak,
+                  motes: motesGathered,
+                  auroraBands: Self.ribbonThresholds.dropFirst().filter { scoreValue >= $0 }.count,
+                  reachedDawn: reachedDawn, isZen: isZen)
+    }
 
     /// Player pause. Freezes the update loop and every running action. Kept
     /// separate from `isPaused`, which SKView resets when the app comes back.
@@ -148,6 +173,8 @@ final class RelayScene: SKScene {
         shadow.zPosition = -0.1
         puck.addChild(shadow)
         if !isZen { addScoreHUD() }
+        addMoteHUD()
+        [softHaptic, lightHaptic, crashHaptic].forEach { $0.prepare() }
         addGate()
     }
 
@@ -172,6 +199,21 @@ final class RelayScene: SKScene {
             label.zPosition = 30
             addChild(label)
         }
+    }
+
+    private func addMoteHUD() {
+        moteLabel.text = "✦ 0"
+        moteLabel.fontSize = 14
+        moteLabel.fontColor = SKColor(red: 1, green: 0.93, blue: 0.72, alpha: 0.85)
+        moteLabel.horizontalAlignmentMode = .right
+        moteLabel.position = CGPoint(x: size.width - 30, y: size.height - (isZen ? 96 : 140))
+        moteLabel.zPosition = 30
+        addChild(moteLabel)
+    }
+
+    private func haptic(_ generator: UIImpactFeedbackGenerator, _ intensity: CGFloat) {
+        guard hapticsEnabled else { return }
+        generator.impactOccurred(intensity: intensity)
     }
 
     // MARK: - Sky
@@ -255,6 +297,7 @@ final class RelayScene: SKScene {
         }
         shiftSky(to: milestone.sky)
         showBanner(milestone.title)
+        haptic(softHaptic, 0.5)
         milestoneIndex += 1
     }
 
@@ -267,7 +310,7 @@ final class RelayScene: SKScene {
     }
 
     /// Each arch passed brightens the aurora a little: band 1 fills over the
-    /// first 10 arches, band 2 by 25, band 3 by 50, band 4 by 100.
+    /// first 10 arches, band 2 by 20, band 3 by 35, band 4 by 50.
     private func feedAurora(from point: CGPoint) {
         for (i, ribbon) in ribbons.enumerated() where i + 1 < Self.ribbonThresholds.count {
             let start = Self.ribbonThresholds[i], end = Self.ribbonThresholds[i + 1]
@@ -388,10 +431,18 @@ final class RelayScene: SKScene {
         spawnClock += dt
         if spawnClock >= spawnInterval {
             spawnClock -= spawnInterval
+            pickupSpawnedThisCycle = false
             noteEvent("gateSpawn")
             addGate()
         }
+        if !pickupSpawnedThisCycle && spawnClock >= spawnInterval * 0.5 {
+            pickupSpawnedThisCycle = true
+            if Double.random(in: 0...1) < 0.55 { addPickup() }
+        }
 
+        if Self.autopilot, let next = gates.first(where: { !$0.scored && !$0.cleared }) {
+            targetX = next.opening.midX   // test-only: steer through arch centres
+        }
         let bounds = Self.puckRadius + 8
         let dx = targetX - puck.position.x
         puck.position.x += dx * min(1, CGFloat(dt) * 11)
@@ -408,6 +459,15 @@ final class RelayScene: SKScene {
         }
         trail.removeAll {
             if $0.alpha <= 0.005 { $0.removeFromParent(); return true }
+            return false
+        }
+        for mote in pickups {
+            mote.position.y -= step
+            let d = hypot(mote.position.x - puck.position.x, mote.position.y - puck.position.y)
+            if mote.name != "taken" && d < Self.puckRadius + 12 { collect(mote) }
+        }
+        pickups.removeAll {
+            if $0.position.y < -40 || $0.parent == nil { $0.removeFromParent(); return true }
             return false
         }
         let touchDistance = Self.gateThickness / 2 + Self.puckRadius
@@ -432,7 +492,17 @@ final class RelayScene: SKScene {
                 scoreValue += 1
                 scoreLabel.text = "\(scoreValue)"
                 AudioManager.shared.playGateChime(gate: scoreValue)
+                let opening = gates[index].opening
+                if abs(puck.position.x - opening.midX) <= opening.width * 0.16 {
+                    perfectPass()
+                } else {
+                    perfectStreak = 0
+                }
                 checkMilestone()
+                if scoreValue == Self.dawnArches && !reachedDawn {
+                    reachDawn()
+                    if !isZen { return }
+                }
                 // Gentle acknowledgement instead of a sharp flash: the lantern
                 // swells slightly, the arch takes on the aurora's colour, and a
                 // mote of light drifts up to strengthen the aurora.
@@ -496,6 +566,8 @@ final class RelayScene: SKScene {
     // MARK: - Hitch logging (launch with -hitchLog to enable)
 
     private static let hitchLogging = ProcessInfo.processInfo.arguments.contains("-hitchLog")
+    /// Test-only: launch with -autopilot to steer through every arch centre.
+    private static let autopilot = ProcessInfo.processInfo.arguments.contains("-autopilot")
     private var lastEvent = "none"
     private var lastEventTime: TimeInterval = 0
 
@@ -514,16 +586,114 @@ final class RelayScene: SKScene {
                      frame * 1000, children.count, gates.count, scoreValue, lastEvent, since))
     }
 
-    private func finishRun() {
+    private func finishRun(victory: Bool = false) {
         guard !ended else { return }
         ended = true
-        // Slow dim rather than a strobe-like blink.
-        let dim = SKAction.fadeAlpha(to: 0.45, duration: 0.5)
-        dim.timingMode = .easeOut
-        puck.run(dim)
-        [scoreTitle, scoreLabel].forEach { $0.run(.fadeOut(withDuration: 0.5)) }
-        onGameOver?(scoreValue)
+        if !victory {
+            // Slow dim rather than a strobe-like blink.
+            let dim = SKAction.fadeAlpha(to: 0.45, duration: 0.5)
+            dim.timingMode = .easeOut
+            puck.run(dim)
+            haptic(crashHaptic, 0.55)
+        }
+        [scoreTitle, scoreLabel, moteLabel].forEach { $0.run(.fadeOut(withDuration: 0.5)) }
+        onGameOver?(result)
     }
+
+    // MARK: - Perfect passes, motes, dawn
+
+    /// Through the centre of the arch: a soft ripple, a gentle haptic, a bonus
+    /// mote, and a quiet streak count above the lantern.
+    private func perfectPass() {
+        perfects += 1
+        perfectStreak += 1
+        bestPerfectStreak = max(bestPerfectStreak, perfectStreak)
+        motesGathered += 1
+        moteLabel.text = "✦ \(motesGathered)"
+        haptic(softHaptic, 0.7)
+
+        let ring = SKSpriteNode(texture: Self.ringTexture, size: CGSize(width: 40, height: 40))
+        ring.color = currentAuroraColor
+        ring.colorBlendFactor = 1
+        ring.blendMode = .add
+        ring.alpha = 0.55
+        ring.position = puck.position
+        ring.zPosition = 9.5
+        addChild(ring)
+        let ripple = SKAction.group([.scale(to: 2.4, duration: 0.6), .fadeOut(withDuration: 0.6)])
+        ripple.timingMode = .easeOut
+        ring.run(.sequence([ripple, .removeFromParent()]))
+
+        if perfectStreak >= 2 {
+            let tag = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+            tag.text = "PERFECT ×\(perfectStreak)"
+            tag.fontSize = 12
+            tag.fontColor = SKColor.white.withAlphaComponent(0.75)
+            tag.position = CGPoint(x: puck.position.x, y: puck.position.y + 34)
+            tag.zPosition = 20
+            tag.alpha = 0
+            addChild(tag)
+            tag.run(.sequence([.group([.fadeIn(withDuration: 0.2), .moveBy(x: 0, y: 10, duration: 0.9)]),
+                               .fadeOut(withDuration: 0.4), .removeFromParent()]))
+        }
+    }
+
+    /// A mote of light floating between arches. Some sit off the safe line.
+    private func addPickup() {
+        let mote = SKSpriteNode(texture: Self.glowTexture, size: CGSize(width: 26, height: 26))
+        mote.color = SKColor(red: 1, green: 0.93, blue: 0.72, alpha: 1)
+        mote.colorBlendFactor = 1
+        mote.blendMode = .add
+        mote.alpha = 0.9
+        mote.position = CGPoint(x: CGFloat.random(in: 40...(size.width - 40)), y: size.height + 30)
+        mote.zPosition = 7
+        let core = SKSpriteNode(texture: Self.dotTexture, size: CGSize(width: 6, height: 6))
+        core.alpha = 0.9
+        mote.addChild(core)
+        let pulse = SKAction.sequence([.scale(to: 1.15, duration: 0.9), .scale(to: 0.9, duration: 0.9)])
+        pulse.timingMode = .easeInEaseOut
+        mote.run(.repeatForever(pulse))
+        addChild(mote)
+        pickups.append(mote)
+    }
+
+    private func collect(_ mote: SKSpriteNode) {
+        mote.name = "taken"
+        motesGathered += 1
+        moteLabel.text = "✦ \(motesGathered)"
+        haptic(lightHaptic, 0.4)
+        mote.removeAllActions()
+        let fly = SKAction.move(to: moteLabel.position, duration: 0.5)
+        fly.timingMode = .easeIn
+        mote.run(.sequence([.group([fly, .scale(to: 0.4, duration: 0.5), .fadeAlpha(to: 0.3, duration: 0.5)]),
+                            .removeFromParent()]))
+    }
+
+    /// Dawn: the sky warms, the night's relay is carried. Ends a normal run
+    /// as a victory; Zen just greets the morning and glides on.
+    private func reachDawn() {
+        reachedDawn = true
+        shiftSky(to: Self.dawnSky)
+        stars.forEach { $0.run(.fadeAlpha(to: 0.15, duration: 3)) }
+        haptic(softHaptic, 1)
+        if isZen {
+            showBanner("DAWN · THE LIGHT IS CARRIED", at: 0.55)
+        } else {
+            finishRun(victory: true)   // the end screen shows the dawn title
+        }
+    }
+
+    /// A thin soft ring for the perfect-pass ripple.
+    private static let ringTexture: SKTexture = {
+        let size = CGSize(width: 64, height: 64)
+        let image = UIGraphicsImageRenderer(size: size).image { _ in
+            let path = UIBezierPath(ovalIn: CGRect(x: 4, y: 4, width: 56, height: 56))
+            path.lineWidth = 3
+            UIColor.white.setStroke()
+            path.stroke()
+        }
+        return SKTexture(image: image)
+    }()
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) { steer(touches) }
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) { steer(touches) }

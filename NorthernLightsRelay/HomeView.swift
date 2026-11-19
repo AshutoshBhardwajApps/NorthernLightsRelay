@@ -9,7 +9,8 @@ struct HomeView: View {
     @State private var runID = UUID()
     @State private var runScene = RelayScene(size: CGSize(width: 390, height: 844))
     @State private var isNewBest = false
-    @State private var newlyUnlocked: [PuckStyle] = []
+    @State private var outcome = RunOutcome()
+    @State private var lastRun = RunResult()
     @State private var canRestart = false
     @State private var isPaused = false
     @State private var showIntro = false
@@ -61,11 +62,26 @@ struct HomeView: View {
 
     private var homeScreen: some View {
         VStack(spacing: 0) {
-            Spacer()
+            HStack {
+                Label("\(settings.motes)", systemImage: "sparkle")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Color(red: 1, green: 0.93, blue: 0.72))
+                    .padding(.horizontal, 12)
+                    .frame(height: 32)
+                    .background(.white.opacity(0.08), in: Capsule())
+                    .accessibilityLabel("\(settings.motes) motes of light")
+                Spacer()
+                settingsMenu
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 58)
+
+            Spacer(minLength: 8)
             Image(systemName: "sparkles")
-                .font(.system(size: 28, weight: .light))
+                .font(.system(size: 24, weight: .light))
                 .foregroundStyle(Color.cyan.opacity(0.9))
-                .padding(.bottom, 18)
+                .padding(.bottom, 14)
             Text("NORTHERN LIGHTS")
                 .font(.system(size: 31, weight: .bold, design: .rounded))
                 .tracking(3)
@@ -78,9 +94,9 @@ struct HomeView: View {
             Text("Carry the last light across the frozen north.")
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.65))
-                .padding(.top, 20)
+                .padding(.top, 14)
 
-            Spacer()
+            Spacer(minLength: 8)
 
             HStack(alignment: .top, spacing: 0) {
                 statColumn(title: "PERSONAL BEST", value: "\(settings.bestScore)")
@@ -88,15 +104,16 @@ struct HomeView: View {
             }
             .padding(.horizontal, 36)
 
+            goalsCard
+                .padding(.horizontal, 28)
+                .padding(.top, 16)
+
             dailyGoalBar
                 .padding(.horizontal, 36)
-                .padding(.top, 22)
-
-            audioControls
-                .padding(.top, 18)
+                .padding(.top, 16)
 
             puckPicker
-                .padding(.top, 22)
+                .padding(.top, 16)
 
             Button { startRun(zen: false) } label: {
                 HStack(spacing: 12) {
@@ -106,11 +123,11 @@ struct HomeView: View {
                 .font(.headline.weight(.bold))
                 .foregroundStyle(ink)
                 .frame(maxWidth: .infinity)
-                .frame(height: 56)
+                .frame(height: 54)
                 .background(Color.cyan, in: Capsule())
             }
             .padding(.horizontal, 36)
-            .padding(.top, 24)
+            .padding(.top, 18)
 
             Button { startRun(zen: true) } label: {
                 HStack(spacing: 8) {
@@ -120,30 +137,77 @@ struct HomeView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.85))
                 .frame(maxWidth: .infinity)
-                .frame(height: 46)
+                .frame(height: 44)
                 .overlay(Capsule().stroke(.white.opacity(0.25), lineWidth: 1))
             }
             .padding(.horizontal, 36)
-            .padding(.top, 12)
+            .padding(.top, 10)
 
-            Text("DRAG TO GUIDE THE LIGHT THROUGH THE ARCHES")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .tracking(1.3)
-                .foregroundStyle(.white.opacity(0.48))
-                .padding(.top, 14)
-
-            Button { showIntro = true } label: {
-                Label("THE STORY", systemImage: "book")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .tracking(1.3)
-                    .foregroundStyle(Color.cyan.opacity(0.7))
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 14)
-            }
-            .padding(.top, 2)
-            .padding(.bottom, 30)
+            Text("DRAG TO GUIDE THE LIGHT · CENTRE PASSES ARE PERFECT")
+                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                .tracking(1.1)
+                .foregroundStyle(.white.opacity(0.45))
+                .padding(.top, 12)
+                .padding(.bottom, 34)
         }
-        .padding(.top, 50)
+    }
+
+    /// Music, sounds, haptics and the story, tucked into one calm menu.
+    private var settingsMenu: some View {
+        Menu {
+            Toggle(isOn: $settings.musicEnabled) { Label("Music", systemImage: "music.note") }
+            Toggle(isOn: $settings.effectsEnabled) { Label("Sounds", systemImage: "bell") }
+            Toggle(isOn: $settings.hapticsEnabled) { Label("Haptics", systemImage: "iphone.radiowaves.left.and.right") }
+            Divider()
+            Button { showIntro = true } label: { Label("The Story", systemImage: "book") }
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.8))
+                .frame(width: 40, height: 40)
+                .background(.white.opacity(0.08), in: Circle())
+        }
+        .accessibilityLabel("Settings")
+    }
+
+    /// Alto's-style: three goals at a time; finish all three to rise a level.
+    private var goalsCard: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Text("LEVEL \(settings.level)")
+                    .font(.caption2.weight(.bold))
+                    .tracking(1.8)
+                    .foregroundStyle(Color.cyan.opacity(0.85))
+                Spacer()
+                Text("\(settings.goals.filter(\.done).count) / 3")
+                    .font(.caption2.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            ForEach(settings.goals) { goal in
+                HStack(spacing: 10) {
+                    Image(systemName: goal.done ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 14))
+                        .foregroundStyle(goal.done ? Color.green.opacity(0.85) : .white.opacity(0.35))
+                    Text(goal.title)
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(goal.done ? 0.5 : 0.85))
+                        .strikethrough(goal.done, color: .white.opacity(0.4))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 4)
+                    if let progress = goal.progressText {
+                        Text(progress)
+                            .font(.caption2)
+                            .monospacedDigit()
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.1), lineWidth: 1))
     }
 
     private func statColumn(title: String, value: String, symbol: String? = nil) -> some View {
@@ -159,7 +223,7 @@ struct HomeView: View {
                         .foregroundStyle(Color.orange.opacity(0.85))
                 }
                 Text(value)
-                    .font(.system(size: 44, weight: .light, design: .rounded))
+                    .font(.system(size: 38, weight: .light, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(.white)
             }
@@ -238,32 +302,6 @@ struct HomeView: View {
                     .foregroundStyle(.white.opacity(0.45))
             }
         }
-    }
-
-    private var audioControls: some View {
-        HStack(spacing: 16) {
-            audioButton(title: "MUSIC", symbol: settings.musicEnabled ? "music.note" : "music.note", isOn: settings.musicEnabled) {
-                settings.musicEnabled.toggle()
-            }
-            audioButton(title: "SOUNDS", symbol: settings.effectsEnabled ? "bell" : "bell.slash", isOn: settings.effectsEnabled) {
-                settings.effectsEnabled.toggle()
-            }
-        }
-    }
-
-    private func audioButton(title: String, symbol: String, isOn: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: symbol)
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .tracking(1.2)
-                .foregroundStyle(.white.opacity(isOn ? 0.82 : 0.42))
-                .padding(.horizontal, 14)
-                .frame(height: 34)
-                .background(.white.opacity(isOn ? 0.10 : 0.045), in: Capsule())
-                .overlay(Capsule().stroke(.white.opacity(isOn ? 0.22 : 0.10), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(title.capitalized) \(isOn ? "on" : "off")")
     }
 
     // MARK: - Run
@@ -365,6 +403,12 @@ struct HomeView: View {
                 .onTapGesture { if canRestart { startRun(zen: false) } }
 
             VStack(spacing: 10) {
+                if lastRun.reachedDawn {
+                    Text("DAWN · THE LIGHT IS CARRIED")
+                        .font(.caption.weight(.bold))
+                        .tracking(2.5)
+                        .foregroundStyle(Color(red: 1, green: 0.85, blue: 0.75))
+                }
                 Text("\(score)")
                     .font(.system(size: 76, weight: .ultraLight, design: .rounded))
                     .monospacedDigit()
@@ -385,7 +429,9 @@ struct HomeView: View {
                 .foregroundStyle(.white.opacity(0.7))
                 .padding(.top, 14)
 
-                ForEach(newlyUnlocked) { style in
+                runRewards
+
+                ForEach(outcome.unlockedStyles) { style in
                     HStack(spacing: 8) {
                         Circle().fill(style.color).frame(width: 12, height: 12)
                         Text("A new spirit awakens: \(style.name)")
@@ -398,7 +444,7 @@ struct HomeView: View {
                     .font(.caption.weight(.semibold))
                     .tracking(2)
                     .foregroundStyle(.white.opacity(canRestart ? 0.75 : 0))
-                    .padding(.top, 40)
+                    .padding(.top, 28)
                     .allowsHitTesting(false)
 
                 homeButton
@@ -406,6 +452,30 @@ struct HomeView: View {
             }
             .allowsHitTesting(canRestart)
         }
+    }
+
+    /// Motes earned, goals finished this run, and a level-up if it happened.
+    private var runRewards: some View {
+        VStack(spacing: 8) {
+            if outcome.motesEarned > 0 {
+                Label("+\(outcome.motesEarned) motes of light", systemImage: "sparkle")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color(red: 1, green: 0.93, blue: 0.72))
+            }
+            ForEach(outcome.completedGoals) { goal in
+                Label(goal.title, systemImage: "checkmark.circle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(Color.green.opacity(0.85))
+            }
+            if let level = outcome.leveledUpTo {
+                Text("LEVEL \(level) · +\(outcome.levelReward) MOTES")
+                    .font(.caption.weight(.bold))
+                    .tracking(2)
+                    .foregroundStyle(Color.cyan)
+                    .padding(.top, 4)
+            }
+        }
+        .padding(.top, 6)
     }
 
     // MARK: - Background
@@ -444,7 +514,8 @@ struct HomeView: View {
     private func startRun(zen: Bool) {
         finalScore = nil
         isNewBest = false
-        newlyUnlocked = []
+        outcome = RunOutcome()
+        lastRun = RunResult()
         canRestart = false
         isPaused = false
         isZenRun = zen
@@ -454,11 +525,13 @@ struct HomeView: View {
         let style = settings.selectedStyle
         let scene = RelayScene(size: CGSize(width: 390, height: 844), zen: zen,
                                puckColor: SKColor(red: style.red, green: style.green, blue: style.blue, alpha: 1))
-        scene.onGameOver = { score in
+        scene.hapticsEnabled = settings.hapticsEnabled
+        scene.onGameOver = { result in
             DispatchQueue.main.async {
-                isNewBest = score > settings.bestScore
-                newlyUnlocked = settings.recordRun(score: score)
-                finalScore = score
+                isNewBest = result.arches > settings.bestScore
+                lastRun = result
+                outcome = settings.record(result)
+                finalScore = result.arches
                 // Short pause so a finger still dragging when you crash
                 // doesn't instantly start the next run.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
@@ -471,10 +544,12 @@ struct HomeView: View {
         withAnimation { isPlaying = true }
     }
 
-    /// Leaving mid-run still banks the gates you cleared (not in zen).
+    /// Leaving mid-run still banks what you earned: arches, motes and goal
+    /// progress (Zen counts toward motes and Zen goals).
     private func leaveRun() {
-        if finalScore == nil && !isZenRun && runScene.score > 0 {
-            settings.recordRun(score: runScene.score)
+        let result = runScene.result
+        if finalScore == nil && (result.arches > 0 || result.motes > 0) {
+            settings.record(result)
         }
         goHome()
     }
