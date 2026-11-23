@@ -5,7 +5,8 @@ import UIKit
 /// image has been added (see ASSET_BRIEF.md) and a code-drawn placeholder
 /// until then. Everything is rendered once and reused.
 enum FoxArt {
-    static let foxSize = CGSize(width: 51, height: 68)
+    /// Large enough that the painted body covers the scene's hit circle.
+    static let foxSize = CGSize(width: 66, height: 88)
     static let cloudHeight: CGFloat = 54
 
     // MARK: Fox
@@ -102,15 +103,15 @@ enum FoxArt {
 
     // MARK: Tail ribbon
 
-    /// A strip that is bright at the fox (top) and clear at its end (bottom),
+    /// A strip that fades in under the fox (top), is brightest just behind it and clear at its end (bottom),
     /// soft on both sides. Bent by the scene with a warp grid.
     static let tailTexture: SKTexture = {
         let size = CGSize(width: 48, height: 128)
         let space = CGColorSpaceCreateDeviceRGB()
         let image = UIGraphicsImageRenderer(size: size).image { ctx in
             let cg = ctx.cgContext
-            let down = [UIColor(white: 1, alpha: 0.95).cgColor, UIColor(white: 1, alpha: 0.45).cgColor, UIColor(white: 1, alpha: 0).cgColor] as CFArray
-            cg.drawLinearGradient(CGGradient(colorsSpace: space, colors: down, locations: [0, 0.45, 1])!,
+            let down = [UIColor(white: 1, alpha: 0).cgColor, UIColor(white: 1, alpha: 0.95).cgColor, UIColor(white: 1, alpha: 0.45).cgColor, UIColor(white: 1, alpha: 0).cgColor] as CFArray
+            cg.drawLinearGradient(CGGradient(colorsSpace: space, colors: down, locations: [0, 0.07, 0.45, 1])!,
                                   start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
             cg.setBlendMode(.destinationIn)
             let across = [UIColor(white: 1, alpha: 0).cgColor, UIColor(white: 1, alpha: 1).cgColor, UIColor(white: 1, alpha: 0).cgColor] as CFArray
@@ -125,7 +126,7 @@ enum FoxArt {
     /// The left-hand bank. Its right end is the edge of the gap; the scene
     /// mirrors it for the right-hand side.
     static let cloudTexture: SKTexture = {
-        if let image = UIImage(named: "CloudBank") { return SKTexture(image: image) }
+        if let image = UIImage(named: "CloudBank") { return SKTexture(image: softUnderside(image)) }
         let size = CGSize(width: 460, height: cloudHeight)
         let image = UIGraphicsImageRenderer(size: size).image { _ in
             let puffs = UIBezierPath()
@@ -151,6 +152,22 @@ enum FoxArt {
         }
         return SKTexture(image: image)
     }()
+
+    /// Melts the bottom of the painted bank into the night, so it never ends
+    /// in a straight cut.
+    private static func softUnderside(_ image: UIImage) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = image.scale
+        return UIGraphicsImageRenderer(size: image.size, format: format).image { ctx in
+            image.draw(at: .zero)
+            let cg = ctx.cgContext
+            cg.setBlendMode(.destinationIn)
+            let colors = [UIColor(white: 1, alpha: 1).cgColor, UIColor(white: 1, alpha: 0.75).cgColor,
+                          UIColor(white: 1, alpha: 0).cgColor] as CFArray
+            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0.55, 0.78, 1])!
+            cg.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: image.size.height), options: .drawsBeforeStartLocation)
+        }
+    }
 
     // MARK: Fallen star
 
