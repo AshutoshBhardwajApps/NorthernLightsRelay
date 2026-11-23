@@ -5,7 +5,7 @@ struct RunResult {
     var arches = 0
     var perfects = 0
     var bestPerfectStreak = 0
-    var motes = 0              // collected + perfect-pass bonus
+    var motes = 0              // stars actually caught
     var auroraBands = 0
     var reachedDawn = false
     var isZen = false
@@ -35,15 +35,15 @@ struct Goal: Codable, Identifiable, Equatable {
 
     var title: String {
         switch kind {
-        case .archesInRun:   return "Pass \(target) arches in one run"
+        case .archesInRun:   return "Part \(target) clouds in one run"
         case .perfectStreak: return "Make \(target) perfect passes in a row"
         case .perfectsInRun: return "Make \(target) perfect passes in one run"
-        case .motesInRun:    return "Gather \(target) motes of light in one run"
-        case .totalArches:   return "Pass \(target) arches in total"
+        case .motesInRun:    return "Gather \(target) fallen stars in one run"
+        case .totalArches:   return "Part \(target) clouds in total"
         case .auroraBands:   return target == 1 ? "Wake an aurora band" : "Wake \(target) aurora bands in one run"
-        case .zenArches:     return "Glide through \(target) arches in Zen"
-        case .runs:          return "Carry the light \(target) times"
-        case .reachDawn:     return "Carry the light until dawn"
+        case .zenArches:     return "Part \(target) clouds in Zen"
+        case .runs:          return "Carry the fire \(target) times"
+        case .reachDawn:     return "Carry the fire until dawn"
         }
     }
 
@@ -95,7 +95,7 @@ struct Goal: Codable, Identifiable, Equatable {
         case .archesInRun:   return min(55, 6 + 3 * l)
         case .perfectStreak: return min(10, 1 + (l + 1) / 2)
         case .perfectsInRun: return min(25, 2 + l)
-        case .motesInRun:    return min(40, 3 + 2 * l)
+        case .motesInRun:    return min(15, 2 + l)
         case .totalArches:   return 30 + 20 * l
         case .auroraBands:   return min(4, 1 + l / 3)
         case .zenArches:     return 15 + 5 * l

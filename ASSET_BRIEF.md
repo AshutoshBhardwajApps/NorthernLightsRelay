@@ -1,35 +1,35 @@
-# Asset brief — Phase 1 (lantern & aurora)
+# Asset brief: Fox Fires
 
-The game's story is now: **you carry the last lantern light across the frozen north. Each ice arch you pass sends light into the sky and wakes the aurora again.** The look stays calm, flat and easy on the eyes — soft gradients, no harsh outlines, no busy detail.
+This replaces the earlier lantern-and-arches brief. Do not make `Lantern`, `ArchBlock` or `ArchPost`.
 
-Please deliver the files below with these exact names. Code already handles colour tinting, glow and animation, so art should be **neutral/white-ish where noted** so it can be tinted per spirit.
+**Story:** in Finnish folklore the aurora is *revontulet*, "fox fires": a fox's tail sweeps sparks into the sky. Each night one fox runs from dusk to dawn, then passes its fire to the next. The player is tonight's fox.
 
-## 1. Lantern orb — replaces `Puck`
-- File: `Assets.xcassets/Lantern.imageset/Lantern.png` (single scale, 3x)
-- Size: **192 × 192 px**, transparent background, orb centred, filling ~80% of the canvas.
-- Look: a soft **glowing light orb / small lantern flame**, bright centre fading to the edge. **Light and near-white** (the current puck is too dark on the dark ice). The game tints it per spirit (cyan, green, violet, amber) and adds its own halo, so no outer glow needed.
-- Shown on screen at ~33 pt diameter, so keep it simple — reads as "a light", not detailed.
+**Look:** original, calm and painterly, with soft shapes, few details and no harsh outlines. The view is up into the night sky: the fox is seen **from above, running up the screen with its nose at the top**. Nothing may flash or flicker.
 
-## 2. Ice arch segment — replaces the flat gate bars
-- File: `Assets.xcassets/ArchBlock.imageset/ArchBlock.png` (3x)
-- Size: **120 × 54 px** (40 × 18 pt), transparent background.
-- Look: a horizontal **bar of frosted ice / carved ice stone**, rounded ends, subtle top highlight. Pale ice blue, mostly flat.
-- It is stretched horizontally with 9-slice scaling: **keep the left and right 30 px (the rounded ends) distinct, and the middle 60 px plain and repeatable** (no details that look wrong when stretched).
+Pull the latest `main` first. Please don't change Swift code: the game uses each image automatically once it exists under the exact name below, and draws a placeholder until then. Every image is a PNG in its own image set in `NorthernLightsRelay/Assets.xcassets`, in the 3x slot, with a transparent background unless noted.
 
-## 3. Arch end posts (optional, nice to have)
-- File: `Assets.xcassets/ArchPost.imageset/ArchPost.png` (3x)
-- Size: **36 × 72 px**, transparent. A small upright ice pillar / standing stone that sits at each side of the opening. Pale, neutral, tintable.
+| Image set | Pixels | What it is |
+|---|---|---|
+| `Fox1` to `Fox6` | 153 × 204 each | Run cycle, six frames, nose at the top |
+| `FoxPortrait` | 480 × 696 | The same fox with its full bushy tail, for menus and the story |
+| `CloudBank` | 1380 × 162 | Left-hand cloud bank; the game mirrors it for the right |
+| `FallenStar` | 96 × 96 | Four-point soft star, white |
+| `Moon` (replace) | 552 × 552 | Softer, flatter painted moon |
+| `AppIcon` | 1024 × 1024, opaque | Fox running up under an aurora, no text |
 
-## 4. App icon
-- File: `Assets.xcassets/AppIcon.appiconset/` — **1024 × 1024 px**, no transparency.
-- Look: dark night-blue sky, a single glowing lantern orb low in the frame, soft green/violet aurora band above. Minimal, no text.
+## Fox
+- White to very pale blue-grey; the game tints it per fox (cyan, green, violet, amber).
+- It shows at only 51 × 68 points, so use a bright, simple silhouette: pointed snout, wide-set ears, slim body. It must not read as a cat.
+- **No tail and no glow on `Fox1` to `Fox6`.** The game draws both, with the tail starting at the bottom centre.
+- Keep the body centred and the same size in every frame. Only the legs and a slight body bob move. Frame 6 loops into frame 1.
 
-## 5. Audio (optional polish)
-- `Resources/arch_pass.wav` — a soft, warm chime (≤ 0.6 s), slightly brighter than the current `gate_chime.wav`. Mono, 44.1 kHz.
-- `Resources/aurora_swell.wav` — a gentle shimmering swell (1.5–2.5 s) for when an aurora band fully lights. Quiet, no sharp attack.
+## Cloud bank
+- Dark slate-blue storm cloud with a thin moonlit rim along the top, clearly visible against near-black navy.
+- The **right end is the edge of the gap**: rounded, solid, reaching the right edge of the image. The left end runs off screen.
+- Keep the solid core centred vertically, about 78 px tall. Soft puffs may reach the top and bottom.
+- Do not design it to stretch; it is drawn at its own size.
 
-## Not needed
-- Gate lanterns, trail, halo, aurora bands, sky colours, stars — all drawn in code.
-- Text/fonts.
-
-Once the files are in the repo, Claude wires them in (switching `Puck` → `Lantern`, blocks → `ArchBlock`).
+## Audio (optional)
+Replace in `NorthernLightsRelay/Resources`, keeping these names:
+- `gate_chime.wav`: a soft, airy chime for clouds parting, 0.6 s or less, mono, 44.1 kHz. Its pitch is raised through a run.
+- `milestone_chime.wav`: a warm shimmering swell, 1.5 to 2.5 s.

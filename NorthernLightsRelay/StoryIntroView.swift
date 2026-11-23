@@ -7,9 +7,9 @@ struct StoryIntroView: View {
     @State private var shownLines = 0
 
     private let lines = [
-        "Long ago, the northern lights were carried across the sky — one lantern at a time, passed from keeper to keeper.",
-        "Tonight the relay has gone dark. Only your light remains.",
-        "Guide it through the ancient ice arches. Each one you pass wakes the aurora again.",
+        "In the far north, they say a fox lights the sky. Its tail sweeps sparks into the dark, and they become the northern lights.",
+        "Each night one fox runs from dusk to dawn, then passes its fire to the next.",
+        "Tonight, the fire is yours.",
     ]
 
     var body: some View {
@@ -20,9 +20,12 @@ struct StoryIntroView: View {
 
             VStack(spacing: 28) {
                 Spacer()
-                Image(systemName: "sparkle")
-                    .font(.system(size: 26, weight: .light))
-                    .foregroundStyle(Color.cyan.opacity(0.85))
+                Image(uiImage: FoxArt.portrait)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 120)
+                    .shadow(color: .cyan.opacity(0.8), radius: 18)
+                    .accessibilityHidden(true)
                     .opacity(shownLines > 0 ? 1 : 0)
 
                 ForEach(lines.indices, id: \.self) { i in

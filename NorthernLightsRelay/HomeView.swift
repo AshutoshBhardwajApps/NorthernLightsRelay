@@ -19,6 +19,7 @@ struct HomeView: View {
     private let ink = Color(red: 0.03, green: 0.10, blue: 0.17)
 
     var body: some View {
+        GeometryReader { screen in
         ZStack {
             winterBackground
 
@@ -26,8 +27,12 @@ struct HomeView: View {
                 runView
                     .transition(.opacity)
             } else {
-                homeScreen
-                    .transition(.opacity)
+                // Scrolls only when the phone is too short to show it all.
+                ScrollView(.vertical, showsIndicators: false) {
+                    homeScreen.frame(minHeight: screen.size.height)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .transition(.opacity)
             }
 
             if !isPlaying && (showIntro || !settings.hasSeenIntro) {
@@ -37,6 +42,8 @@ struct HomeView: View {
                 }
                 .transition(.opacity)
             }
+        }
+        .frame(width: screen.size.width, height: screen.size.height)
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.35), value: isPlaying)
@@ -63,14 +70,14 @@ struct HomeView: View {
     private var homeScreen: some View {
         VStack(spacing: 0) {
             HStack {
-                Label("\(settings.motes)", systemImage: "sparkle")
+                Label("\(settings.motes)", systemImage: "star.fill")
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Color(red: 1, green: 0.93, blue: 0.72))
                     .padding(.horizontal, 12)
                     .frame(height: 32)
                     .background(.white.opacity(0.08), in: Capsule())
-                    .accessibilityLabel("\(settings.motes) motes of light")
+                    .accessibilityLabel("\(settings.motes) fallen stars")
                 Spacer()
                 settingsMenu
             }
@@ -78,10 +85,14 @@ struct HomeView: View {
             .padding(.top, 58)
 
             Spacer(minLength: 8)
-            Image(systemName: "sparkles")
-                .font(.system(size: 24, weight: .light))
-                .foregroundStyle(Color.cyan.opacity(0.9))
-                .padding(.bottom, 14)
+            Image(uiImage: FoxArt.portrait)
+                .resizable()
+                .scaledToFit()
+                .frame(height: 72)
+                .colorMultiply(settings.selectedStyle.color.mix(0.55))
+                .shadow(color: settings.selectedStyle.color.opacity(0.8), radius: 14)
+                .padding(.bottom, 12)
+                .accessibilityHidden(true)
             Text("NORTHERN LIGHTS")
                 .font(.system(size: 31, weight: .bold, design: .rounded))
                 .tracking(3)
@@ -91,12 +102,12 @@ struct HomeView: View {
                 .tracking(8)
                 .foregroundStyle(Color.cyan.opacity(0.9))
                 .padding(.top, 7)
-            Text("Carry the last light across the frozen north.")
+            Text("Run the night sky. Paint the northern lights.")
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.65))
-                .padding(.top, 14)
+                .padding(.top, 12)
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 14)
 
             HStack(alignment: .top, spacing: 0) {
                 statColumn(title: "PERSONAL BEST", value: "\(settings.bestScore)")
@@ -118,7 +129,7 @@ struct HomeView: View {
             Button { startRun(zen: false) } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "arrow.right")
-                    Text("CARRY THE LIGHT").tracking(2)
+                    Text("CARRY THE FIRE").tracking(2)
                 }
                 .font(.headline.weight(.bold))
                 .foregroundStyle(ink)
@@ -143,12 +154,12 @@ struct HomeView: View {
             .padding(.horizontal, 36)
             .padding(.top, 10)
 
-            Text("DRAG TO GUIDE THE LIGHT · CENTRE PASSES ARE PERFECT")
+            Text("DRAG TO STEER THE FOX · CENTRE PASSES ARE PERFECT")
                 .font(.system(size: 9, weight: .semibold, design: .rounded))
                 .tracking(1.1)
                 .foregroundStyle(.white.opacity(0.45))
                 .padding(.top, 12)
-                .padding(.bottom, 34)
+                .padding(.bottom, 30)
         }
     }
 
@@ -241,7 +252,7 @@ struct HomeView: View {
                     .tracking(1.8)
                     .foregroundStyle(settings.dailyGoalMet ? Color.green.opacity(0.85) : .white.opacity(0.55))
                 Spacer()
-                Text("\(min(today, goal)) / \(goal) ARCHES")
+                Text("\(min(today, goal)) / \(goal) CLOUDS")
                     .font(.caption2.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.7))
@@ -277,12 +288,11 @@ struct HomeView: View {
                                         .font(.system(size: 11))
                                         .foregroundStyle(.white.opacity(0.5))
                                 } else {
-                                    // A small glowing light in the spirit's colour.
-                                    Circle()
-                                        .fill(RadialGradient(colors: [.white, style.color, style.color.opacity(0.6)],
-                                                             center: .center, startRadius: 1, endRadius: 14))
-                                        .frame(width: 26, height: 26)
-                                        .shadow(color: style.color.opacity(0.8), radius: 8)
+                                    Image(uiImage: FoxArt.portrait)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .colorMultiply(style.color.mix(0.75))
+                                        .shadow(color: style.color.opacity(0.8), radius: 6)
                                         .frame(width: 30, height: 30)
                                 }
                             }
@@ -297,7 +307,7 @@ struct HomeView: View {
                 }
             }
             if let next = settings.nextUnlock {
-                Text("\(next.remaining) more arches to awaken \(next.style.name)")
+                Text("\(next.remaining) more clouds to meet the \(next.style.name) fox")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.45))
             }
@@ -404,7 +414,7 @@ struct HomeView: View {
 
             VStack(spacing: 10) {
                 if lastRun.reachedDawn {
-                    Text("DAWN · THE LIGHT IS CARRIED")
+                    Text("DAWN · THE FIRE IS PASSED ON")
                         .font(.caption.weight(.bold))
                         .tracking(2.5)
                         .foregroundStyle(Color(red: 1, green: 0.85, blue: 0.75))
@@ -420,9 +430,9 @@ struct HomeView: View {
 
                 Group {
                     if settings.dailyGoalMet {
-                        Label("Tonight's relay complete · \(settings.currentStreak) nights lit", systemImage: "flame.fill")
+                        Label("Tonight's relay complete · \(settings.currentStreak) \(settings.currentStreak == 1 ? "night" : "nights") lit", systemImage: "flame.fill")
                     } else {
-                        Text("Tonight's relay: \(settings.todayGates) / \(SettingsStore.dailyGoal) arches")
+                        Text("Tonight's relay: \(settings.todayGates) / \(SettingsStore.dailyGoal) clouds")
                     }
                 }
                 .font(.footnote)
@@ -434,13 +444,13 @@ struct HomeView: View {
                 ForEach(outcome.unlockedStyles) { style in
                     HStack(spacing: 8) {
                         Circle().fill(style.color).frame(width: 12, height: 12)
-                        Text("A new spirit awakens: \(style.name)")
+                        Text("A new fox joins the relay: \(style.name)")
                     }
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.9))
                 }
 
-                Text("TAP ANYWHERE TO CARRY IT AGAIN")
+                Text("TAP ANYWHERE TO RUN AGAIN")
                     .font(.caption.weight(.semibold))
                     .tracking(2)
                     .foregroundStyle(.white.opacity(canRestart ? 0.75 : 0))
@@ -458,7 +468,7 @@ struct HomeView: View {
     private var runRewards: some View {
         VStack(spacing: 8) {
             if outcome.motesEarned > 0 {
-                Label("+\(outcome.motesEarned) motes of light", systemImage: "sparkle")
+                Label("+\(outcome.motesEarned) fallen stars", systemImage: "star.fill")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color(red: 1, green: 0.93, blue: 0.72))
             }
@@ -468,7 +478,7 @@ struct HomeView: View {
                     .foregroundStyle(Color.green.opacity(0.85))
             }
             if let level = outcome.leveledUpTo {
-                Text("LEVEL \(level) · +\(outcome.levelReward) MOTES")
+                Text("LEVEL \(level) · +\(outcome.levelReward) STARS")
                     .font(.caption.weight(.bold))
                     .tracking(2)
                     .foregroundStyle(Color.cyan)
@@ -566,3 +576,11 @@ struct HomeView: View {
     }
 }
 
+private extension Color {
+    /// This colour blended toward white; 1 keeps it as is.
+    func mix(_ amount: Double) -> Color {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return Color(red: 1 - (1 - r) * amount, green: 1 - (1 - g) * amount, blue: 1 - (1 - b) * amount)
+    }
+}

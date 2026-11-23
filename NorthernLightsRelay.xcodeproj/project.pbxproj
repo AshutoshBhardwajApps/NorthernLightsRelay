@@ -14,6 +14,7 @@
 		A00000000000000000000005 /* AudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* AudioManager.swift */; };
 		A00000000000000000000006 /* StoryIntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* StoryIntroView.swift */; };
 		A00000000000000000000007 /* Progression.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* Progression.swift */; };
+		A00000000000000000000008 /* FoxArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000009 /* FoxArt.swift */; };
 		A10000000000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* Assets.xcassets */; };
 		A10000000000000000000002 /* ambient_loop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* ambient_loop.m4a */; };
 		A10000000000000000000003 /* gate_chime.wav in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* gate_chime.wav */; };
@@ -29,6 +30,7 @@
 		B00000000000000000000006 /* AudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioManager.swift; sourceTree = "<group>"; };
 		B00000000000000000000007 /* StoryIntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryIntroView.swift; sourceTree = "<group>"; };
 		B00000000000000000000008 /* Progression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Progression.swift; sourceTree = "<group>"; };
+		B00000000000000000000009 /* FoxArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoxArt.swift; sourceTree = "<group>"; };
 		B10000000000000000000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B10000000000000000000003 /* ambient_loop.m4a */ = {isa = PBXFileReference; lastKnownFileType = audio.m4a; path = Resources/ambient_loop.m4a; sourceTree = "<group>"; };
 		B10000000000000000000004 /* gate_chime.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/gate_chime.wav; sourceTree = "<group>"; };
@@ -56,6 +58,7 @@
 				B00000000000000000000006 /* AudioManager.swift */,
 				B00000000000000000000007 /* StoryIntroView.swift */,
 				B00000000000000000000008 /* Progression.swift */,
+				B00000000000000000000009 /* FoxArt.swift */,
 				B10000000000000000000002 /* Assets.xcassets */,
 				B10000000000000000000003 /* ambient_loop.m4a */,
 				B10000000000000000000004 /* gate_chime.wav */,
@@ -166,6 +169,7 @@
 				A00000000000000000000005 /* AudioManager.swift in Sources */,
 				A00000000000000000000006 /* StoryIntroView.swift in Sources */,
 				A00000000000000000000007 /* Progression.swift in Sources */,
+				A00000000000000000000008 /* FoxArt.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

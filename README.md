@@ -4,7 +4,7 @@ A new SwiftUI + SpriteKit iOS game bootstrapped with reusable patterns from `iOS
 
 ## Current prototype
 
-Drag left or right to steer through the ice gates. The run speeds up as gates are cleared. Personal best, puck unlocks, daily gate goal, and day streak are saved locally. A soft ambient loop, rising gate chime, and milestone chime are included; music and effects can be toggled independently on the home screen.
+Fox Fires: drag left or right to steer a spirit fox through gaps in the storm clouds. Its tail paints the aurora, and the run speeds up as clouds are parted. Personal best, puck unlocks, daily gate goal, and day streak are saved locally. A soft ambient loop, rising gate chime, and milestone chime are included; music and effects can be toggled independently on the home screen.
 
 ## Website and repository setup
 

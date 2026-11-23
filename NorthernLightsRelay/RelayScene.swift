@@ -16,14 +16,14 @@ final class RelayScene: SKScene {
         let sky: (r: CGFloat, g: CGFloat, b: CGFloat)
     }
 
-    private static let puckRadius: CGFloat = 15
+    private static let puckRadius: CGFloat = 13   // a little inside the fox, so near misses are fair
     private static let gateThickness: CGFloat = 18
     private static let baseSky: (r: CGFloat, g: CGFloat, b: CGFloat) = (0.025, 0.07, 0.14)
     private static let milestones: [Milestone] = [
-        Milestone(gates: 10, title: "THE SKY STIRS", sky: (0.03, 0.09, 0.16)),
-        Milestone(gates: 20, title: "AURORA RISING", sky: (0.03, 0.11, 0.17)),
-        Milestone(gates: 35, title: "VIOLET VEIL", sky: (0.05, 0.07, 0.18)),
-        Milestone(gates: 50, title: "THE NIGHT IS YOURS", sky: (0.06, 0.05, 0.16)),
+        Milestone(gates: 10, title: "THE FIRE CATCHES", sky: (0.03, 0.09, 0.16)),
+        Milestone(gates: 20, title: "FOX FIRES RISING", sky: (0.03, 0.11, 0.17)),
+        Milestone(gates: 35, title: "VIOLET SKY", sky: (0.05, 0.07, 0.18)),
+        Milestone(gates: 50, title: "THE WHOLE SKY BURNS BRIGHT", sky: (0.06, 0.05, 0.16)),
         Milestone(gates: 55, title: "FIRST LIGHT", sky: (0.10, 0.09, 0.21)),
     ]
     /// A run is one night: reach this many arches and dawn breaks.
@@ -35,23 +35,6 @@ final class RelayScene: SKScene {
     // made scrolling stutter once gates, ~40 trail dots/sec and aurora bands
     // were on screen. Everything that moves or repeats now uses a texture that
     // is drawn once and batched by SpriteKit.
-
-    private static let blockTextureSize = CGSize(width: 40, height: 18)
-    private static let blockTexture: SKTexture = {
-        // Uses the "ArchBlock" art (120×54 px, 9-slice) once it is added.
-        if UIImage(named: "ArchBlock") != nil { return SKTexture(imageNamed: "ArchBlock") }
-        let size = blockTextureSize
-        let image = UIGraphicsImageRenderer(size: size).image { _ in
-            let rect = CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5)
-            let path = UIBezierPath(roundedRect: rect, cornerRadius: 8)
-            UIColor(red: 0.50, green: 0.84, blue: 0.90, alpha: 0.95).setFill()
-            path.fill()
-            UIColor.white.withAlphaComponent(0.42).setStroke()
-            path.lineWidth = 1
-            path.stroke()
-        }
-        return SKTexture(image: image)
-    }()
 
     private static let dotTexture: SKTexture = {
         let size = CGSize(width: 32, height: 32)
@@ -76,8 +59,7 @@ final class RelayScene: SKScene {
 
     let isZen: Bool
     private let puckColor: SKColor
-    // Uses the new "Lantern" art as soon as it is added to the asset catalog.
-    private let puck = SKSpriteNode(imageNamed: UIImage(named: "Lantern") != nil ? "Lantern" : "Puck")
+    private let puck = SKSpriteNode(texture: FoxArt.foxTextures[0])   // the fox
     private var gates: [Gate] = []
     private var ribbons: [SKNode] = []
     private var ribbonColors: [SKColor] = []
@@ -86,9 +68,12 @@ final class RelayScene: SKScene {
     private var stars: [SKNode] = []
     private var targetX: CGFloat = 0
     private var lastUpdate: TimeInterval = 0
-    private var trail: [SKSpriteNode] = []
+    private let tail = SKSpriteNode(texture: FoxArt.tailTexture)
+    private var tailPath: [(x: CGFloat, travelled: CGFloat)] = []
+    private var travelled: CGFloat = 0
+    private var tailFlare: CGFloat = 0
+    private static let tailRows = 32
     private var spawnClock: TimeInterval = 0
-    private var trailClock: TimeInterval = 0
     private var ended = false
     private var recovering = false
     private var scoreValue = 0
@@ -106,6 +91,8 @@ final class RelayScene: SKScene {
     private var reachedDawn = false
     private var pickups: [SKSpriteNode] = []
     private var pickupSpawnedThisCycle = false
+    private var bonusStars = 0            // earned, waiting for a clear gap between clouds
+    private static let bonusValue = 3
     private let moteLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
     private let softHaptic = UIImpactFeedbackGenerator(style: .soft)
     private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
@@ -147,14 +134,14 @@ final class RelayScene: SKScene {
         view.ignoresSiblingOrder = true
         drawSky()
         targetX = size.width / 2
-        puck.size = CGSize(width: Self.puckRadius * 2.2, height: Self.puckRadius * 2.2)
+        puck.size = FoxArt.foxSize
         puck.color = puckColor
-        puck.colorBlendFactor = 0.52
+        puck.colorBlendFactor = 0.3
+        puck.run(.repeatForever(.animate(with: FoxArt.foxTextures, timePerFrame: 0.11)), withKey: "run")
         puck.position = CGPoint(x: targetX, y: playerY)
         puck.zPosition = 10
         addChild(puck)
-        // The lantern's halo: a soft, slowly breathing glow so the light reads
-        // clearly on the dark ice, whatever the orb art looks like.
+        // A soft, slowly breathing glow keeps the fox readable on the dark sky.
         let halo = SKSpriteNode(texture: Self.glowTexture, size: CGSize(width: 96, height: 96))
         halo.color = puckColor
         halo.colorBlendFactor = 1
@@ -165,13 +152,16 @@ final class RelayScene: SKScene {
         let breathe = SKAction.sequence([.fadeAlpha(to: 0.6, duration: 2.4), .fadeAlpha(to: 0.42, duration: 2.4)])
         breathe.timingMode = .easeInEaseOut
         halo.run(.repeatForever(breathe))
-        let shadow = SKSpriteNode(texture: Self.dotTexture, size: CGSize(width: 40, height: 12))
-        shadow.color = .black
-        shadow.colorBlendFactor = 1
-        shadow.alpha = 0.28
-        shadow.position = CGPoint(x: 0, y: -19)
-        shadow.zPosition = -0.1
-        puck.addChild(shadow)
+        tail.anchorPoint = .zero
+        tail.position = .zero
+        tail.size = size
+        tail.color = puckColor
+        tail.colorBlendFactor = 1
+        tail.blendMode = .add
+        tail.zPosition = 9
+        tail.subdivisionLevels = 2
+        addChild(tail)
+        updateTail(step: 0, dt: 0)
         if !isZen { addScoreHUD() }
         addMoteHUD()
         [softHaptic, lightHaptic, crashHaptic].forEach { $0.prepare() }
@@ -185,7 +175,7 @@ final class RelayScene: SKScene {
 
     private func addScoreHUD() {
         let right = size.width - 30
-        scoreTitle.text = "A R C H E S"
+        scoreTitle.text = "C L O U D S"
         scoreTitle.fontSize = 10
         scoreTitle.fontColor = SKColor.white.withAlphaComponent(0.55)
         scoreTitle.horizontalAlignmentMode = .right
@@ -223,7 +213,7 @@ final class RelayScene: SKScene {
         // a faint, distant backdrop so gates passing in front of it read as depth.
         let moon = SKSpriteNode(imageNamed: "Moon")
         moon.size = CGSize(width: 92, height: 92)
-        moon.alpha = 0.76
+        moon.alpha = 0.5
         moon.position = CGPoint(x: size.width * 0.22, y: size.height * 0.70)
         moon.zPosition = -1
         addChild(moon)
@@ -261,28 +251,12 @@ final class RelayScene: SKScene {
         }
     }
 
-    /// Renders one aurora band to a texture once, instead of a live shape.
+    /// One curtain of aurora light, rendered to a texture once.
     private func ribbonSprite(baseY: CGFloat, phase: CGFloat, color: UIColor) -> SKSpriteNode {
-        let path = UIBezierPath()
-        let w = size.width + 80
-        let steps = 32
-        func top(_ x: CGFloat) -> CGFloat { baseY + sin(x / w * .pi * 2.2 + phase) * 26 }
-        func bottom(_ x: CGFloat) -> CGFloat { top(x) - 34 - sin(x / w * .pi * 3 + phase) * 12 }
-        path.move(to: CGPoint(x: -40, y: top(-40)))
-        for s in 1...steps { let x = -40 + w * CGFloat(s) / CGFloat(steps); path.addLine(to: CGPoint(x: x, y: top(x))) }
-        for s in stride(from: steps, through: 0, by: -1) { let x = -40 + w * CGFloat(s) / CGFloat(steps); path.addLine(to: CGPoint(x: x, y: bottom(x))) }
-        path.close()
-
-        let box = path.bounds
-        // Shift into the image's own (top-left origin, y-down) space.
-        path.apply(CGAffineTransform(translationX: -box.minX, y: -box.minY))
-        path.apply(CGAffineTransform(scaleX: 1, y: -1).translatedBy(x: 0, y: -box.height))
-        let image = UIGraphicsImageRenderer(size: box.size).image { _ in
-            color.withAlphaComponent(0.13).setFill()
-            path.fill()
-        }
-        let sprite = SKSpriteNode(texture: SKTexture(image: image), size: box.size)
-        sprite.position = CGPoint(x: box.midX, y: box.midY)
+        let image = FoxArt.curtain(width: size.width + 80, phase: phase, color: color)
+        let sprite = SKSpriteNode(texture: SKTexture(image: image), size: image.size)
+        sprite.blendMode = .add
+        sprite.position = CGPoint(x: size.width / 2, y: baseY)
         return sprite
     }
 
@@ -339,14 +313,25 @@ final class RelayScene: SKScene {
         ]))
     }
 
-    /// The arch you passed softly takes on the aurora's colour.
-    private func lightArch(_ gate: Gate) {
+    /// The cloud bank you passed takes on the aurora's colour, drifts apart
+    /// and leaves a few stars behind it.
+    private func partClouds(_ gate: Gate) {
         let color = currentAuroraColor
         gate.node.enumerateChildNodes(withName: "block") { node, _ in
-            node.run(.colorize(with: color, colorBlendFactor: 0.4, duration: 0.6))
+            let side: CGFloat = node.xScale > 0 ? -1 : 1
+            let drift = SKAction.moveBy(x: side * 70, y: 0, duration: 0.9)
+            drift.timingMode = .easeOut
+            node.run(.group([.colorize(with: color, colorBlendFactor: 0.5, duration: 0.4), drift,
+                             .sequence([.wait(forDuration: 0.25), .fadeAlpha(to: 0.12, duration: 0.65)])]))
         }
-        gate.node.enumerateChildNodes(withName: "lantern") { node, _ in
-            node.run(.colorize(with: color, colorBlendFactor: 1, duration: 0.6))
+        for _ in 0..<4 {
+            let star = SKSpriteNode(texture: FoxArt.starTexture, size: CGSize(width: 7, height: 7))
+            star.alpha = 0
+            star.position = CGPoint(x: CGFloat.random(in: 20...(size.width - 20)),
+                                    y: gate.opening.midY + CGFloat.random(in: -14...14))
+            star.zPosition = -0.2
+            gate.node.addChild(star)
+            star.run(.sequence([.wait(forDuration: Double.random(in: 0.2...0.5)), .fadeAlpha(to: 0.7, duration: 0.5)]))
         }
     }
 
@@ -386,31 +371,16 @@ final class RelayScene: SKScene {
         gateNode.position = CGPoint(x: 0, y: size.height + 28)
         gateNode.zPosition = 5
 
-        // Blocks run off the screen edges (rounded ends hidden) to the opening.
-        // A 9-slice sprite keeps the rounded corners crisp at any width.
-        let overhang: CGFloat = 12
-        let leftWidth = opening.minX + overhang
-        let rightX = opening.maxX
-        let rightWidth = size.width + overhang - rightX
-        let base = Self.blockTextureSize
-        for (x, width) in [(-overhang, leftWidth), (rightX, rightWidth)] where width > 0 {
-            let block = SKSpriteNode(texture: Self.blockTexture, size: base)
-            block.centerRect = CGRect(x: 10 / base.width, y: 0, width: (base.width - 20) / base.width, height: 1)
-            block.xScale = width / base.width
-            block.name = "block"
-            block.position = CGPoint(x: x + width / 2, y: opening.midY)
-            gateNode.addChild(block)
-        }
-        // Soft lanterns mark the edges of the opening, in line with the gate.
-        for x in [opening.minX, opening.maxX] {
-            let lantern = SKSpriteNode(texture: Self.dotTexture, size: CGSize(width: 7, height: 7))
-            lantern.name = "lantern"
-            lantern.color = .cyan
-            lantern.colorBlendFactor = 1
-            lantern.alpha = 0.8
-            lantern.position = CGPoint(x: x, y: opening.midY)
-            lantern.zPosition = 0.1
-            gateNode.addChild(lantern)
+        // One wide cloud picture per side, slid to the gap edge. Nothing is
+        // stretched, so the puffs keep their shape; the far end is off screen.
+        let cloudSize = CGSize(width: max(460, size.width), height: FoxArt.cloudHeight)
+        for (edge, mirrored) in [(opening.minX, false), (opening.maxX, true)] {
+            let bank = SKSpriteNode(texture: FoxArt.cloudTexture, size: cloudSize)
+            bank.name = "block"
+            bank.anchorPoint = CGPoint(x: 1, y: 0.5)
+            bank.xScale = mirrored ? -1 : 1
+            bank.position = CGPoint(x: edge, y: opening.midY)
+            gateNode.addChild(bank)
         }
         addChild(gateNode)
         gates.append(Gate(node: gateNode, opening: opening))
@@ -437,7 +407,12 @@ final class RelayScene: SKScene {
         }
         if !pickupSpawnedThisCycle && spawnClock >= spawnInterval * 0.5 {
             pickupSpawnedThisCycle = true
-            if Double.random(in: 0...1) < 0.55 { addPickup() }
+            if bonusStars > 0 {
+                bonusStars -= 1
+                addPickup(bonus: true)
+            } else if Double.random(in: 0...1) < 0.55 {
+                addPickup()
+            }
         }
 
         if Self.autopilot, let next = gates.first(where: { !$0.scored && !$0.cleared }) {
@@ -447,24 +422,14 @@ final class RelayScene: SKScene {
         let dx = targetX - puck.position.x
         puck.position.x += dx * min(1, CGFloat(dt) * 11)
         puck.position.x = min(size.width - bounds, max(bounds, puck.position.x))
-        dropTrail(dt)
+        puck.zRotation = max(-0.4, min(0.4, -dx * 0.006))   // lean into the turn
 
         let step = gateSpeed * CGFloat(dt)
-        // Trail dots ride the same per-frame step as the gates (no separate
-        // SKAction clock), so they never drift against the ice.
-        for dot in trail {
-            dot.position.y -= step
-            dot.alpha -= CGFloat(dt / 0.55) * 0.16
-            dot.setScale(max(0.3, dot.xScale - CGFloat(dt / 0.55) * 0.7))
-        }
-        trail.removeAll {
-            if $0.alpha <= 0.005 { $0.removeFromParent(); return true }
-            return false
-        }
-        for mote in pickups {
+        updateTail(step: step, dt: CGFloat(dt))
+        for mote in pickups where mote.name != "taken" {
             mote.position.y -= step
             let d = hypot(mote.position.x - puck.position.x, mote.position.y - puck.position.y)
-            if mote.name != "taken" && d < Self.puckRadius + 12 { collect(mote) }
+            if d < Self.puckRadius + 12 { collect(mote) }
         }
         pickups.removeAll {
             if $0.position.y < -40 || $0.parent == nil { $0.removeFromParent(); return true }
@@ -503,13 +468,13 @@ final class RelayScene: SKScene {
                     reachDawn()
                     if !isZen { return }
                 }
-                // Gentle acknowledgement instead of a sharp flash: the lantern
-                // swells slightly, the arch takes on the aurora's colour, and a
-                // mote of light drifts up to strengthen the aurora.
+                // Gentle acknowledgement instead of a sharp flash: the fox
+                // swells slightly, the clouds drift apart in the aurora's colour,
+                // and a spark drifts up to strengthen the aurora.
                 let swell = SKAction.sequence([.scale(to: 1.06, duration: 0.25), .scale(to: 1, duration: 0.35)])
                 swell.timingMode = .easeInEaseOut
                 puck.run(swell, withKey: "swell")
-                lightArch(gates[index])
+                partClouds(gates[index])
                 feedAurora(from: CGPoint(x: gates[index].opening.midX, y: gateY))
             }
         }
@@ -524,9 +489,9 @@ final class RelayScene: SKScene {
     private func beginRecovery() {
         guard !recovering else { return }
         recovering = true
-        let dim = SKAction.fadeAlpha(to: 0.35, duration: 0.45)
-        dim.timingMode = .easeOut
-        puck.run(dim)
+        puck.run(.fadeOut(withDuration: 0.35))
+        tail.run(.sequence([.fadeAlpha(to: 0.15, duration: 0.4), .wait(forDuration: 1.1), .fadeIn(withDuration: 0.4)]))
+        burst(gathering: true)
         showBanner("BREATHE", at: 0.30)
 
         let near = size.height * 0.28
@@ -547,20 +512,83 @@ final class RelayScene: SKScene {
         }]), withKey: "recovery")
     }
 
-    /// A soft trail of fading puck-coloured dots that drift away with the ice.
-    private func dropTrail(_ dt: TimeInterval) {
-        trailClock += dt
-        guard trailClock >= 0.025 else { return }
-        trailClock = 0
-        let diameter = Self.puckRadius * 1.1
-        let dot = SKSpriteNode(texture: Self.dotTexture, size: CGSize(width: diameter, height: diameter))
-        dot.color = puckColor
-        dot.colorBlendFactor = 1
-        dot.alpha = 0.16
-        dot.position = puck.position
-        dot.zPosition = 9
-        addChild(dot)
-        trail.append(dot)
+    // MARK: - Tail and sparks
+
+    /// The tail is one strip of light bent along the path the fox has run, so
+    /// it costs a single draw however long it is.
+    private func updateTail(step: CGFloat, dt: CGFloat) {
+        travelled += step
+        tailFlare = max(0, tailFlare - dt * 1.1)
+        tailPath.append((puck.position.x, travelled))
+        let length = playerY + 10
+        while tailPath.count > 2, tailPath[1].travelled < travelled - length - 20 { tailPath.removeFirst() }
+
+        let rows = Self.tailRows
+        // Where the path was at each depth, from the tip (row 0) up to the fox.
+        var xs: [CGFloat] = []
+        xs.reserveCapacity(rows + 1)
+        var sample = 0
+        for row in 0...rows {
+            let depth = length * (1 - CGFloat(row) / CGFloat(rows))
+            let at = travelled - depth
+            while sample + 1 < tailPath.count - 1, tailPath[sample + 1].travelled < at { sample += 1 }
+            let a = tailPath[sample], b = tailPath[min(sample + 1, tailPath.count - 1)]
+            let span = b.travelled - a.travelled
+            let t = span > 0 ? max(0, min(1, (at - a.travelled) / span)) : 0
+            xs.append(a.x + (b.x - a.x) * t + sin(depth * 0.035 - travelled * 0.012) * 9 * depth / length)
+        }
+        // Round off sharp turns; the end at the fox stays put.
+        for _ in 0..<20 {
+            var previous = xs[0]
+            for row in 1..<rows {
+                let here = xs[row]
+                xs[row] = (previous + here * 2 + xs[row + 1]) / 4
+                previous = here
+            }
+        }
+        // Width is measured across the path, so slanted parts don't pinch.
+        var points: [vector_float2] = []
+        points.reserveCapacity((rows + 1) * 2)
+        let rowHeight = length / CGFloat(rows)
+        for row in 0...rows {
+            let far = 1 - CGFloat(row) / CGFloat(rows)
+            let up = min(row + 1, rows), down = max(row - 1, 0)
+            let slopeX = xs[up] - xs[down], slopeY = CGFloat(up - down) * rowHeight
+            let run = max(0.001, hypot(slopeX, slopeY))
+            let half = (9 + 20 * far) * (1 + tailFlare * 0.7)
+            let acrossX = slopeY / run * half, acrossY = -slopeX / run * half
+            let y = playerY - 16 - length * far
+            points.append(vector_float2(Float((xs[row] - acrossX) / size.width), Float((y - acrossY) / size.height)))
+            points.append(vector_float2(Float((xs[row] + acrossX) / size.width), Float((y + acrossY) / size.height)))
+        }
+        tail.warpGeometry = SKWarpGeometryGrid(columns: 1, rows: rows).replacingByDestinationPositions(positions: points)
+    }
+
+    /// The fox bursts softly into sparks; in Zen they gather back into it.
+    private func burst(gathering: Bool) {
+        let home = puck.position
+        for i in 0..<22 {
+            let spark = SKSpriteNode(texture: Self.glowTexture, size: CGSize(width: 16, height: 16))
+            spark.color = i % 3 == 0 ? .white : puckColor
+            spark.colorBlendFactor = 1
+            spark.blendMode = .add
+            spark.position = home
+            spark.alpha = 0   // brighten only once spread out, so nothing flashes
+            spark.zPosition = 11
+            addChild(spark)
+            let angle = CGFloat(i) / 22 * .pi * 2 + CGFloat.random(in: -0.15...0.15)
+            let reach = CGFloat.random(in: 34...95)
+            let out = SKAction.moveBy(x: cos(angle) * reach, y: sin(angle) * reach, duration: 0.8)
+            out.timingMode = .easeOut
+            if gathering {
+                let back = SKAction.move(to: home, duration: 0.7)
+                back.timingMode = .easeIn
+                spark.run(.sequence([.group([out, .fadeAlpha(to: 0.8, duration: 0.6)]), .wait(forDuration: 0.1),
+                                     .group([back, .fadeOut(withDuration: 0.6)]), .removeFromParent()]))
+            } else {
+                spark.run(.sequence([.group([out, .fadeAlpha(to: 0.8, duration: 0.45)]), .fadeOut(withDuration: 0.7), .removeFromParent()]))
+            }
+        }
     }
 
     // MARK: - Hitch logging (launch with -hitchLog to enable)
@@ -590,14 +618,60 @@ final class RelayScene: SKScene {
         guard !ended else { return }
         ended = true
         if !victory {
-            // Slow dim rather than a strobe-like blink.
-            let dim = SKAction.fadeAlpha(to: 0.45, duration: 0.5)
-            dim.timingMode = .easeOut
-            puck.run(dim)
+            puck.run(.fadeOut(withDuration: 0.35))
+            tail.run(.fadeOut(withDuration: 0.8))
+            burst(gathering: false)
             haptic(crashHaptic, 0.55)
         }
         [scoreTitle, scoreLabel, moteLabel].forEach { $0.run(.fadeOut(withDuration: 0.5)) }
-        onGameOver?(result)
+        if victory {
+            passTheFire()
+        } else {
+            onGameOver?(result)
+        }
+    }
+
+    /// Dawn: the clouds clear, the next fox runs up alongside, takes the fire
+    /// and carries it on; then the run ends. Driven by actions, so pausing or
+    /// leaving stops it (leaving records the run instead).
+    private func passTheFire() {
+        for gate in gates { gate.node.run(.fadeOut(withDuration: 0.8)) }
+        for star in pickups { star.run(.fadeOut(withDuration: 0.5)) }
+        puck.zRotation = 0
+        let side: CGFloat = puck.position.x > size.width / 2 ? -1 : 1
+        let next = SKSpriteNode(texture: FoxArt.foxTextures[0], size: FoxArt.foxSize)
+        next.color = currentAuroraColor
+        next.colorBlendFactor = 0.3
+        next.position = CGPoint(x: puck.position.x + side * 64, y: -60)
+        next.zPosition = 10
+        addChild(next)
+        next.run(.repeatForever(.animate(with: FoxArt.foxTextures, timePerFrame: 0.11)))
+
+        let arrive = SKAction.moveTo(y: playerY, duration: 1.1)
+        arrive.timingMode = .easeOut
+        let leave = SKAction.moveTo(y: size.height + 80, duration: 1.5)
+        leave.timingMode = .easeIn
+        next.run(.sequence([arrive, .wait(forDuration: 0.7), leave]))
+
+        let fire = SKSpriteNode(texture: Self.glowTexture, size: CGSize(width: 120, height: 120))
+        fire.color = currentAuroraColor
+        fire.colorBlendFactor = 1
+        fire.blendMode = .add
+        fire.alpha = 0
+        fire.position = puck.position
+        fire.zPosition = 12
+        addChild(fire)
+        let across = SKAction.moveBy(x: side * 64, y: 0, duration: 0.6)
+        across.timingMode = .easeInEaseOut
+        let rise = SKAction.moveTo(y: size.height + 80, duration: 1.5)
+        rise.timingMode = .easeIn
+        fire.run(.sequence([.wait(forDuration: 0.9), .fadeIn(withDuration: 0.3), across, rise]))
+        tail.run(.sequence([.wait(forDuration: 1.2), .fadeOut(withDuration: 1.2)]))
+        puck.run(.sequence([.wait(forDuration: 2.1), .fadeOut(withDuration: 1.2)]))   // its night is done
+        run(.sequence([.wait(forDuration: 3.5), .run { [weak self] in
+            guard let self else { return }
+            self.onGameOver?(self.result)
+        }]))
     }
 
     // MARK: - Perfect passes, motes, dawn
@@ -608,9 +682,11 @@ final class RelayScene: SKScene {
         perfects += 1
         perfectStreak += 1
         bestPerfectStreak = max(bestPerfectStreak, perfectStreak)
-        motesGathered += 1
-        moteLabel.text = "✦ \(motesGathered)"
+        // Stars are only ever counted when caught: five perfects in a row send
+        // a bigger star down the sky to catch.
+        if perfectStreak % 5 == 0 { bonusStars += 1 }
         haptic(softHaptic, 0.7)
+        tailFlare = 1
 
         let ring = SKSpriteNode(texture: Self.ringTexture, size: CGSize(width: 40, height: 40))
         ring.color = currentAuroraColor
@@ -624,30 +700,37 @@ final class RelayScene: SKScene {
         ripple.timingMode = .easeOut
         ring.run(.sequence([ripple, .removeFromParent()]))
 
-        if perfectStreak >= 2 {
-            let tag = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
-            tag.text = "PERFECT ×\(perfectStreak)"
-            tag.fontSize = 12
-            tag.fontColor = SKColor.white.withAlphaComponent(0.75)
-            tag.position = CGPoint(x: puck.position.x, y: puck.position.y + 34)
-            tag.zPosition = 20
-            tag.alpha = 0
-            addChild(tag)
-            tag.run(.sequence([.group([.fadeIn(withDuration: 0.2), .moveBy(x: 0, y: 10, duration: 0.9)]),
-                               .fadeOut(withDuration: 0.4), .removeFromParent()]))
-        }
+        if perfectStreak >= 2 { showTag("PERFECT ×\(perfectStreak)") }
+    }
+
+    /// A small note that rises from the fox and fades.
+    private func showTag(_ text: String) {
+        let tag = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+        tag.text = text
+        tag.fontSize = 12
+        tag.fontColor = SKColor.white.withAlphaComponent(0.75)
+        tag.position = CGPoint(x: puck.position.x, y: puck.position.y + 40)
+        tag.zPosition = 20
+        tag.alpha = 0
+        addChild(tag)
+        tag.run(.sequence([.group([.fadeIn(withDuration: 0.2), .moveBy(x: 0, y: 10, duration: 0.9)]),
+                           .fadeOut(withDuration: 0.4), .removeFromParent()]))
     }
 
     /// A mote of light floating between arches. Some sit off the safe line.
-    private func addPickup() {
-        let mote = SKSpriteNode(texture: Self.glowTexture, size: CGSize(width: 26, height: 26))
+    private func addPickup(bonus: Bool = false) {
+        let mote = SKSpriteNode(texture: Self.glowTexture, size: bonus ? CGSize(width: 58, height: 58) : CGSize(width: 34, height: 34))
+        mote.name = bonus ? "bonus" : "star"
         mote.color = SKColor(red: 1, green: 0.93, blue: 0.72, alpha: 1)
         mote.colorBlendFactor = 1
         mote.blendMode = .add
         mote.alpha = 0.9
         mote.position = CGPoint(x: CGFloat.random(in: 40...(size.width - 40)), y: size.height + 30)
         mote.zPosition = 7
-        let core = SKSpriteNode(texture: Self.dotTexture, size: CGSize(width: 6, height: 6))
+        let core = SKSpriteNode(texture: FoxArt.starTexture, size: bonus ? CGSize(width: 30, height: 30) : CGSize(width: 18, height: 18))
+        core.color = SKColor(red: 1, green: 0.93, blue: 0.72, alpha: 1)
+        core.colorBlendFactor = 1
+        core.zPosition = 0.1
         core.alpha = 0.9
         mote.addChild(core)
         let pulse = SKAction.sequence([.scale(to: 1.15, duration: 0.9), .scale(to: 0.9, duration: 0.9)])
@@ -658,8 +741,10 @@ final class RelayScene: SKScene {
     }
 
     private func collect(_ mote: SKSpriteNode) {
+        let bonus = mote.name == "bonus"
         mote.name = "taken"
-        motesGathered += 1
+        motesGathered += bonus ? Self.bonusValue : 1
+        if bonus { showTag("+\(Self.bonusValue)") }
         moteLabel.text = "✦ \(motesGathered)"
         haptic(lightHaptic, 0.4)
         mote.removeAllActions()
@@ -677,7 +762,7 @@ final class RelayScene: SKScene {
         stars.forEach { $0.run(.fadeAlpha(to: 0.15, duration: 3)) }
         haptic(softHaptic, 1)
         if isZen {
-            showBanner("DAWN · THE LIGHT IS CARRIED", at: 0.55)
+            showBanner("DAWN · THE FIRE IS PASSED ON", at: 0.55)
         } else {
             finishRun(victory: true)   // the end screen shows the dawn title
         }

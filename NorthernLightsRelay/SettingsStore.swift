@@ -1,8 +1,8 @@
 import Foundation
 import SwiftUI
 
-/// A lantern spirit (the light's colour, halo and trail) awakened by passing
-/// arches over all runs. Called a "puck" in older code.
+/// A fox (its tint, glow and tail) that joins the relay as clouds are parted
+/// over all runs. Called a "puck" in older code.
 struct PuckStyle: Identifiable, Equatable {
     let id: String
     let name: String
@@ -12,7 +12,7 @@ struct PuckStyle: Identifiable, Equatable {
     var color: Color { Color(red: red, green: green, blue: blue) }
 
     static let all: [PuckStyle] = [
-        PuckStyle(id: "frost", name: "Frost", unlockAt: 0, red: 0.42, green: 0.94, blue: 1.00),
+        PuckStyle(id: "frost", name: "Arctic", unlockAt: 0, red: 0.42, green: 0.94, blue: 1.00),
         PuckStyle(id: "aurora", name: "Aurora", unlockAt: 100, red: 0.45, green: 1.00, blue: 0.62),
         PuckStyle(id: "twilight", name: "Twilight", unlockAt: 250, red: 0.74, green: 0.58, blue: 1.00),
         PuckStyle(id: "ember", name: "Ember", unlockAt: 500, red: 1.00, green: 0.72, blue: 0.42),
@@ -48,7 +48,7 @@ final class SettingsStore: ObservableObject {
         musicEnabled = defaults.object(forKey: prefix + "music") as? Bool ?? true
         effectsEnabled = defaults.object(forKey: prefix + "effects") as? Bool ?? true
         selectedStyleID = defaults.string(forKey: prefix + "style") ?? "frost"
-        hasSeenIntro = defaults.bool(forKey: prefix + "seenIntro")
+        hasSeenIntro = defaults.bool(forKey: prefix + "seenFoxIntro")
         hapticsEnabled = defaults.object(forKey: prefix + "haptics") as? Bool ?? true
         motes = defaults.integer(forKey: prefix + "motes")
         let savedLevel = max(1, defaults.integer(forKey: prefix + "level"))
@@ -153,7 +153,7 @@ final class SettingsStore: ObservableObject {
         defaults.set(musicEnabled, forKey: prefix + "music")
         defaults.set(effectsEnabled, forKey: prefix + "effects")
         defaults.set(selectedStyleID, forKey: prefix + "style")
-        defaults.set(hasSeenIntro, forKey: prefix + "seenIntro")
+        defaults.set(hasSeenIntro, forKey: prefix + "seenFoxIntro")
         defaults.set(hapticsEnabled, forKey: prefix + "haptics")
         defaults.set(motes, forKey: prefix + "motes")
         defaults.set(level, forKey: prefix + "level")
