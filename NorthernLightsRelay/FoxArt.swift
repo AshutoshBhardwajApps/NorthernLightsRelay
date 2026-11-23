@@ -126,7 +126,7 @@ enum FoxArt {
     /// The left-hand bank. Its right end is the edge of the gap; the scene
     /// mirrors it for the right-hand side.
     static let cloudTexture: SKTexture = {
-        if let image = UIImage(named: "CloudBank") { return SKTexture(image: softUnderside(image)) }
+        if let image = UIImage(named: "CloudBank") { return SKTexture(image: image) }
         let size = CGSize(width: 460, height: cloudHeight)
         let image = UIGraphicsImageRenderer(size: size).image { _ in
             let puffs = UIBezierPath()
@@ -152,22 +152,6 @@ enum FoxArt {
         }
         return SKTexture(image: image)
     }()
-
-    /// Melts the bottom of the painted bank into the night, so it never ends
-    /// in a straight cut.
-    private static func softUnderside(_ image: UIImage) -> UIImage {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = image.scale
-        return UIGraphicsImageRenderer(size: image.size, format: format).image { ctx in
-            image.draw(at: .zero)
-            let cg = ctx.cgContext
-            cg.setBlendMode(.destinationIn)
-            let colors = [UIColor(white: 1, alpha: 1).cgColor, UIColor(white: 1, alpha: 0.75).cgColor,
-                          UIColor(white: 1, alpha: 0).cgColor] as CFArray
-            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0.55, 0.78, 1])!
-            cg.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: image.size.height), options: .drawsBeforeStartLocation)
-        }
-    }
 
     // MARK: Fallen star
 

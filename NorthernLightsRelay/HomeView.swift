@@ -88,8 +88,8 @@ struct HomeView: View {
             Image(uiImage: FoxArt.portrait)
                 .resizable()
                 .scaledToFit()
-                .frame(height: 72)
-                .colorMultiply(settings.selectedStyle.color.mix(0.55))
+                .frame(height: 104)
+                .colorMultiply(settings.selectedStyle.color.mix(0.3))
                 .shadow(color: settings.selectedStyle.color.opacity(0.8), radius: 14)
                 .padding(.bottom, 12)
                 .accessibilityHidden(true)
@@ -307,7 +307,7 @@ struct HomeView: View {
                 }
             }
             if let next = settings.nextUnlock {
-                Text("\(next.remaining) more clouds to meet the \(next.style.name) fox")
+                Text("\(next.remaining) more \(next.remaining == 1 ? "cloud" : "clouds") to meet the \(next.style.name) fox")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.45))
             }
