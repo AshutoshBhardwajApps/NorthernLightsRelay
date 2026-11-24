@@ -213,9 +213,11 @@ final class RelayScene: SKScene {
         // a faint, distant backdrop so gates passing in front of it read as depth.
         let moon = SKSpriteNode(imageNamed: "Moon")
         moon.size = CGSize(width: 92, height: 92)
-        moon.alpha = 0.5
+        // Solid, so no stars show through, but tinted toward the night sky.
+        moon.color = SKColor(red: 0.16, green: 0.25, blue: 0.40, alpha: 1)
+        moon.colorBlendFactor = 0.62
         moon.position = CGPoint(x: size.width * 0.22, y: size.height * 0.70)
-        moon.zPosition = -1
+        moon.zPosition = -0.75   // over the stars, under the aurora
         addChild(moon)
         for i in 0..<20 {
             let diameter: CGFloat = i % 5 == 0 ? 3.6 : 2
@@ -236,7 +238,7 @@ final class RelayScene: SKScene {
         ]
         for spec in ribbonSpecs {
             let ribbon = ribbonSprite(baseY: size.height * spec.y, phase: spec.phase, color: spec.color)
-            ribbon.zPosition = -1.5
+            ribbon.zPosition = -0.7
             ribbon.alpha = 0
             addChild(ribbon)
             // Slow, gentle drift — never a flicker.
